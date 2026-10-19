@@ -4,7 +4,7 @@
 
 #include <algorithm>
 
-LV_FONT_DECLARE(font_montserrat_100);
+LV_IMG_DECLARE(magpie_logo);
 
 namespace {
 
@@ -12,36 +12,52 @@ lv_color_t color(uint32_t hex) {
   return lv_color_hex(hex);
 }
 
-constexpr uint32_t kCyan = 0x08C9F4;
-constexpr uint32_t kWhite = 0xFFFFFF;
-constexpr uint32_t kTextMuted = 0x7C878C;
-constexpr uint32_t kTextSecondary = 0xAEB8BD;
-constexpr uint32_t kTrack = 0x24282B;
-constexpr uint32_t kDivider = 0x303538;
-constexpr uint32_t kAmber = 0xFFB800;
-constexpr uint32_t kOffline = 0xFF5C5C;
-constexpr uint32_t kLinked = 0x4DA3FF;
-constexpr int kResetSegmentWidth = 22;
-constexpr int kResetSegmentGap = 8;
-constexpr int kResetTitleGap = 10;
-constexpr int kResetOpticalOffset = -8;
+constexpr uint32_t kGreen = 0xA8FF4F;
+constexpr uint32_t kWhite = 0xF4F7ED;
+constexpr uint32_t kMuted = 0x718079;
+constexpr uint32_t kPanel = 0x0B1210;
+constexpr uint32_t kTrack = 0x1A231E;
+constexpr uint32_t kDivider = 0x1E2A25;
+constexpr uint32_t kAmber = 0xFFB02E;
+constexpr uint32_t kRed = 0xFF5F57;
+constexpr uint32_t kBlue = 0x55E6D2;
+constexpr uint32_t kViolet = 0xA5B4FC;
 
 UiActionHandler action_handler = nullptr;
 
-lv_obj_t* quota_arc = nullptr;
+lv_obj_t* tileview = nullptr;
+lv_obj_t* pages[4] = {};
+lv_obj_t* page_dots[4] = {};
 lv_obj_t* time_label = nullptr;
 lv_obj_t* connection_label = nullptr;
 lv_obj_t* battery_label = nullptr;
-lv_obj_t* quota_title_label = nullptr;
-lv_obj_t* quota_value_label = nullptr;
-lv_obj_t* percent_label = nullptr;
-lv_obj_t* quota_reset_label = nullptr;
-lv_obj_t* reset_title_label = nullptr;
-lv_obj_t* reset_segments[6] = {};
-lv_obj_t* today_value_label = nullptr;
-lv_obj_t* week_value_label = nullptr;
-lv_obj_t* run_value_label = nullptr;
-lv_obj_t* expiry_value_label = nullptr;
+
+lv_obj_t* success_arc = nullptr;
+lv_obj_t* success_value_label = nullptr;
+lv_obj_t* calls_value_label = nullptr;
+lv_obj_t* errors_value_label = nullptr;
+lv_obj_t* quota_label = nullptr;
+
+lv_obj_t* request_tokens_label = nullptr;
+lv_obj_t* request_ttft_label = nullptr;
+lv_obj_t* request_latest_model_label = nullptr;
+lv_obj_t* request_status_label = nullptr;
+lv_obj_t* request_latency_label = nullptr;
+
+lv_obj_t* session_count_label = nullptr;
+lv_obj_t* session_tokens_label = nullptr;
+lv_obj_t* session_cost_label = nullptr;
+lv_obj_t* top_model_label = nullptr;
+lv_obj_t* top_model_calls_label = nullptr;
+
+lv_obj_t* cache_arc = nullptr;
+lv_obj_t* cache_value_label = nullptr;
+lv_obj_t* context_input_label = nullptr;
+lv_obj_t* context_output_label = nullptr;
+lv_obj_t* context_cache_label = nullptr;
+lv_obj_t* context_reasoning_label = nullptr;
+lv_obj_t* mix_segments[4] = {};
+
 lv_obj_t* quick_actions_overlay = nullptr;
 lv_obj_t* pairing_overlay = nullptr;
 lv_obj_t* pairing_code_label = nullptr;
@@ -54,13 +70,85 @@ void styleLabel(lv_obj_t* label, const lv_font_t* font, uint32_t text_color) {
   lv_obj_set_style_text_opa(label, LV_OPA_COVER, LV_PART_MAIN);
 }
 
-lv_obj_t* createLabel(const char* text, const lv_font_t* font,
-                      uint32_t text_color, lv_align_t align, int x, int y) {
-  lv_obj_t* label = lv_label_create(lv_scr_act());
+lv_obj_t* createLabel(lv_obj_t* parent, const char* text,
+                      const lv_font_t* font, uint32_t text_color) {
+  lv_obj_t* label = lv_label_create(parent);
   lv_label_set_text(label, text);
   styleLabel(label, font, text_color);
-  lv_obj_align(label, align, x, y);
   return label;
+}
+
+void createPageTitle(lv_obj_t* page, const char* title, const char* range) {
+  lv_obj_t* label =
+      createLabel(page, title, &lv_font_montserrat_18, kGreen);
+  lv_obj_set_pos(label, 24, 8);
+  lv_obj_t* range_label =
+      createLabel(page, range, &lv_font_montserrat_14, kMuted);
+  lv_obj_align(range_label, LV_ALIGN_TOP_RIGHT, -24, 11);
+}
+
+lv_obj_t* createCard(lv_obj_t* parent, int x, int y, int width, int height,
+                     const char* title, lv_obj_t** value_label,
+                     const char* note = nullptr) {
+  lv_obj_t* card = lv_obj_create(parent);
+  lv_obj_set_pos(card, x, y);
+  lv_obj_set_size(card, width, height);
+  lv_obj_set_style_radius(card, 10, LV_PART_MAIN);
+  lv_obj_set_style_bg_color(card, color(kPanel), LV_PART_MAIN);
+  lv_obj_set_style_bg_opa(card, LV_OPA_COVER, LV_PART_MAIN);
+  lv_obj_set_style_border_width(card, 0, LV_PART_MAIN);
+  lv_obj_set_style_pad_all(card, 0, LV_PART_MAIN);
+  lv_obj_clear_flag(card, LV_OBJ_FLAG_SCROLLABLE);
+
+  lv_obj_t* title_label =
+      createLabel(card, title, &lv_font_montserrat_14, kMuted);
+  lv_obj_set_pos(title_label, 12, 9);
+  *value_label = createLabel(card, "--", &lv_font_montserrat_32, kWhite);
+  lv_obj_set_pos(*value_label, 12, 25);
+  if (note != nullptr) {
+    lv_obj_t* note_label =
+        createLabel(card, note, &lv_font_montserrat_14, kMuted);
+    lv_obj_align(note_label, LV_ALIGN_BOTTOM_LEFT, 12, -7);
+  }
+  return card;
+}
+
+void createRing(lv_obj_t* parent, lv_obj_t** arc, lv_obj_t** value,
+                const char* caption, int x, int y, int size) {
+  *arc = lv_arc_create(parent);
+  lv_obj_set_pos(*arc, x, y);
+  lv_obj_set_size(*arc, size, size);
+  lv_arc_set_rotation(*arc, 270);
+  lv_arc_set_bg_angles(*arc, 0, 360);
+  lv_arc_set_range(*arc, 0, 1000);
+  lv_arc_set_value(*arc, 0);
+  lv_obj_remove_style(*arc, nullptr, LV_PART_KNOB);
+  lv_obj_set_style_arc_width(*arc, 12, LV_PART_MAIN);
+  lv_obj_set_style_arc_color(*arc, color(kTrack), LV_PART_MAIN);
+  lv_obj_set_style_arc_width(*arc, 12, LV_PART_INDICATOR);
+  lv_obj_set_style_arc_color(*arc, color(kGreen), LV_PART_INDICATOR);
+  lv_obj_set_style_bg_opa(*arc, LV_OPA_TRANSP, LV_PART_MAIN);
+  lv_obj_clear_flag(*arc, LV_OBJ_FLAG_CLICKABLE);
+
+  *value = createLabel(parent, "--.-", &lv_font_montserrat_48, kWhite);
+  lv_obj_align_to(*value, *arc, LV_ALIGN_CENTER, 0, -16);
+  lv_obj_t* unit_label =
+      createLabel(parent, "%", &lv_font_montserrat_18, kGreen);
+  lv_obj_align_to(unit_label, *arc, LV_ALIGN_CENTER, 0, 25);
+  lv_obj_t* caption_label =
+      createLabel(parent, caption, &lv_font_montserrat_14, kMuted);
+  lv_obj_align_to(caption_label, *arc, LV_ALIGN_CENTER, 0, 49);
+}
+
+void updatePageDots(lv_event_t*) {
+  lv_obj_t* active = lv_tileview_get_tile_act(tileview);
+  for (size_t i = 0; i < 4; ++i) {
+    const bool selected = pages[i] == active;
+    lv_obj_set_style_bg_color(page_dots[i],
+                              color(selected ? kGreen : kMuted), LV_PART_MAIN);
+    lv_obj_set_style_bg_opa(page_dots[i],
+                            selected ? LV_OPA_COVER : LV_OPA_50, LV_PART_MAIN);
+  }
 }
 
 void dispatchAction(lv_event_t* event) {
@@ -90,17 +178,15 @@ void createActionButton(lv_obj_t* parent, const char* text, int y,
   lv_obj_set_pos(button, 50, y);
   lv_obj_set_size(button, 350, 58);
   lv_obj_set_style_radius(button, 10, LV_PART_MAIN);
-  lv_obj_set_style_bg_color(button, color(0x091216), LV_PART_MAIN);
+  lv_obj_set_style_bg_color(button, color(kPanel), LV_PART_MAIN);
   lv_obj_set_style_bg_opa(button, LV_OPA_COVER, LV_PART_MAIN);
-  lv_obj_set_style_border_color(button, color(kCyan), LV_PART_MAIN);
+  lv_obj_set_style_border_color(button, color(kGreen), LV_PART_MAIN);
   lv_obj_set_style_border_width(button, 1, LV_PART_MAIN);
   lv_obj_set_style_shadow_width(button, 0, LV_PART_MAIN);
   lv_obj_add_event_cb(button, dispatchOverlayAction, LV_EVENT_CLICKED,
                       reinterpret_cast<void*>(static_cast<uintptr_t>(action)));
 
-  lv_obj_t* label = lv_label_create(button);
-  lv_label_set_text(label, text);
-  styleLabel(label, &lv_font_montserrat_18, kWhite);
+  lv_obj_t* label = createLabel(button, text, &lv_font_montserrat_18, kWhite);
   lv_obj_center(label);
 }
 
@@ -109,57 +195,110 @@ void hideToast(lv_timer_t*) {
   toast_timer = nullptr;
 }
 
-void layoutResetRow(uint8_t segment_count) {
-  lv_obj_update_layout(reset_title_label);
-  const int title_width = lv_obj_get_width(reset_title_label);
-  const int segments_width =
-      segment_count == 0
-          ? 0
-          : segment_count * kResetSegmentWidth +
-                (segment_count - 1) * kResetSegmentGap;
-  const int group_width =
-      title_width +
-      (segment_count == 0 ? 0 : kResetTitleGap + segments_width);
-  const int start_x =
-      (lv_obj_get_width(lv_scr_act()) - group_width) / 2 +
-      (segment_count == 0 ? 0 : kResetOpticalOffset);
-
-  lv_obj_set_pos(reset_title_label, start_x, 359);
-  const int segments_x = start_x + title_width + kResetTitleGap;
-  for (size_t i = 0; i < 6; ++i) {
-    lv_obj_set_pos(reset_segments[i],
-                   segments_x +
-                       static_cast<int>(i) *
-                           (kResetSegmentWidth + kResetSegmentGap),
-                   362);
+String formatLatency(uint32_t milliseconds) {
+  if (milliseconds == 0) {
+    return "-";
   }
+  if (milliseconds < 1000) {
+    return String(milliseconds) + "ms";
+  }
+  return String(static_cast<double>(milliseconds) / 1000.0, 1) + "s";
 }
 
-void createMetricColumn(lv_obj_t* parent, int x, int width, const char* title,
-                        lv_obj_t** value_label, bool clickable,
-                        UiAction action = UiAction::kFocusCodex) {
-  lv_obj_t* column = lv_obj_create(parent);
-  lv_obj_remove_style_all(column);
-  lv_obj_set_pos(column, x, 0);
-  lv_obj_set_size(column, width, 80);
-  lv_obj_clear_flag(column, LV_OBJ_FLAG_SCROLLABLE);
+String formatCost(uint32_t micros) {
+  return "$" + String(static_cast<double>(micros) / 1000000.0, 3);
+}
 
-  if (clickable) {
-    lv_obj_add_flag(column, LV_OBJ_FLAG_CLICKABLE);
-    lv_obj_add_event_cb(
-        column, dispatchAction, LV_EVENT_CLICKED,
-        reinterpret_cast<void*>(static_cast<uintptr_t>(action)));
+void createOverviewPage(lv_obj_t* page) {
+  createPageTitle(page, "OVERVIEW", "TODAY");
+
+  createRing(page, &success_arc, &success_value_label, "SUCCESS", 24, 52, 220);
+
+  lv_obj_t* metrics = lv_obj_create(page);
+  lv_obj_remove_style_all(metrics);
+  lv_obj_set_pos(metrics, 268, 58);
+  lv_obj_set_size(metrics, 188, 220);
+  lv_obj_clear_flag(metrics, LV_OBJ_FLAG_SCROLLABLE);
+  createCard(metrics, 0, 0, 188, 64, "CALLS", &calls_value_label);
+  createCard(metrics, 0, 76, 188, 64, "ERRORS", &errors_value_label);
+  createCard(metrics, 0, 152, 188, 64, "LOWEST QUOTA", &quota_label);
+}
+
+void createRequestsPage(lv_obj_t* page) {
+  createPageTitle(page, "REQUESTS", "TODAY");
+
+  lv_obj_t* model_title =
+      createLabel(page, "LATEST MODEL", &lv_font_montserrat_14, kMuted);
+  lv_obj_set_pos(model_title, 24, 54);
+  request_latest_model_label =
+      createLabel(page, "-", &lv_font_montserrat_32, kWhite);
+  lv_obj_set_pos(request_latest_model_label, 24, 79);
+  lv_obj_set_width(request_latest_model_label, 432);
+  lv_label_set_long_mode(request_latest_model_label, LV_LABEL_LONG_DOT);
+
+  createCard(page, 24, 145, 205, 82, "STATUS", &request_status_label);
+  createCard(page, 251, 145, 205, 82, "LATENCY", &request_latency_label);
+  createCard(page, 24, 242, 205, 82, "AVG TTFT", &request_ttft_label);
+  createCard(page, 251, 242, 205, 82, "TOKENS TODAY",
+             &request_tokens_label);
+}
+
+void createSessionsPage(lv_obj_t* page) {
+  createPageTitle(page, "SESSIONS", "30 DAYS");
+
+  lv_obj_t* count_title =
+      createLabel(page, "SESSIONS", &lv_font_montserrat_14, kMuted);
+  lv_obj_set_pos(count_title, 24, 43);
+  session_count_label =
+      createLabel(page, "--", &lv_font_montserrat_48, kWhite);
+  lv_obj_set_pos(session_count_label, 24, 60);
+
+  createCard(page, 24, 135, 205, 82, "TOTAL TOKENS",
+             &session_tokens_label);
+  createCard(page, 251, 135, 205, 82, "EST. COST", &session_cost_label);
+
+  lv_obj_t* model_title =
+      createLabel(page, "TOP MODEL", &lv_font_montserrat_14, kMuted);
+  lv_obj_set_pos(model_title, 24, 258);
+  top_model_label =
+      createLabel(page, "-", &lv_font_montserrat_32, kWhite);
+  lv_obj_set_pos(top_model_label, 24, 284);
+  lv_obj_set_width(top_model_label, 300);
+  lv_label_set_long_mode(top_model_label, LV_LABEL_LONG_DOT);
+  top_model_calls_label =
+      createLabel(page, "-", &lv_font_montserrat_18, kGreen);
+  lv_obj_align(top_model_calls_label, LV_ALIGN_TOP_RIGHT, -24, 290);
+}
+
+void createContextPage(lv_obj_t* page) {
+  createPageTitle(page, "CONTEXT", "GATEWAY OBSERVED");
+  createRing(page, &cache_arc, &cache_value_label, "CACHE HIT", 140, 42, 200);
+
+  lv_obj_t* mix_title =
+      createLabel(page, "TOKEN MIX", &lv_font_montserrat_14, kMuted);
+  lv_obj_set_pos(mix_title, 24, 258);
+  constexpr uint32_t colors[] = {kBlue, kGreen, kViolet, kAmber};
+  for (size_t i = 0; i < 4; ++i) {
+    mix_segments[i] = lv_obj_create(page);
+    lv_obj_remove_style_all(mix_segments[i]);
+    lv_obj_set_pos(mix_segments[i], 24, 282);
+    lv_obj_set_size(mix_segments[i], 0, 8);
+    lv_obj_set_style_bg_color(mix_segments[i], color(colors[i]), LV_PART_MAIN);
+    lv_obj_set_style_bg_opa(mix_segments[i], LV_OPA_COVER, LV_PART_MAIN);
   }
 
-  lv_obj_t* title_label = lv_label_create(column);
-  lv_label_set_text(title_label, title);
-  styleLabel(title_label, &lv_font_montserrat_12, kCyan);
-  lv_obj_set_pos(title_label, 14, 12);
-
-  *value_label = lv_label_create(column);
-  lv_label_set_text(*value_label, "--");
-  styleLabel(*value_label, &lv_font_montserrat_26, kWhite);
-  lv_obj_set_pos(*value_label, 14, 38);
+  context_input_label =
+      createLabel(page, "INPUT --", &lv_font_montserrat_14, kBlue);
+  lv_obj_set_pos(context_input_label, 24, 306);
+  context_output_label =
+      createLabel(page, "OUTPUT --", &lv_font_montserrat_14, kGreen);
+  lv_obj_set_pos(context_output_label, 251, 306);
+  context_cache_label =
+      createLabel(page, "CACHE --", &lv_font_montserrat_14, kViolet);
+  lv_obj_set_pos(context_cache_label, 24, 338);
+  context_reasoning_label =
+      createLabel(page, "REASON --", &lv_font_montserrat_14, kAmber);
+  lv_obj_set_pos(context_reasoning_label, 251, 338);
 }
 
 }  // namespace
@@ -168,118 +307,91 @@ void uiCreate(UiActionHandler handler) {
   action_handler = handler;
 
   lv_obj_t* screen = lv_scr_act();
-  lv_obj_set_style_bg_color(screen, color(0x000000), LV_PART_MAIN);
+  lv_obj_set_style_bg_color(screen, color(0x030706), LV_PART_MAIN);
   lv_obj_set_style_bg_opa(screen, LV_OPA_COVER, LV_PART_MAIN);
   lv_obj_clear_flag(screen, LV_OBJ_FLAG_SCROLLABLE);
 
-  time_label = createLabel("--/-- --:--", &lv_font_montserrat_18,
-                           kTextSecondary, LV_ALIGN_TOP_LEFT, 28, 20);
+  lv_obj_t* logo = lv_img_create(screen);
+  lv_img_set_src(logo, &magpie_logo);
+  lv_obj_set_pos(logo, 20, 10);
+  lv_obj_t* brand_label =
+      createLabel(screen, "MAGPIE", &lv_font_montserrat_18, kGreen);
+  lv_obj_set_pos(brand_label, 68, 11);
+  lv_obj_t* gateway_label =
+      createLabel(screen, "GATEWAY", &lv_font_montserrat_14, kMuted);
+  lv_obj_set_pos(gateway_label, 68, 31);
 
-  connection_label = createLabel(LV_SYMBOL_BLUETOOTH " LINKED",
-                                 &lv_font_montserrat_14, kTextSecondary,
-                                 LV_ALIGN_TOP_RIGHT, -28, 21);
+  connection_label = createLabel(screen, LV_SYMBOL_BLUETOOTH " OFFLINE",
+                                 &lv_font_montserrat_14, kRed);
+  lv_obj_align(connection_label, LV_ALIGN_TOP_RIGHT, -22, 17);
   lv_obj_add_flag(connection_label, LV_OBJ_FLAG_CLICKABLE);
   lv_obj_set_ext_click_area(connection_label, 12);
   lv_obj_add_event_cb(
       connection_label, dispatchAction, LV_EVENT_CLICKED,
-      reinterpret_cast<void*>(
-          static_cast<uintptr_t>(UiAction::kReconnect)));
+      reinterpret_cast<void*>(static_cast<uintptr_t>(UiAction::kReconnect)));
 
-  battery_label = createLabel("BAT --%", &lv_font_montserrat_14,
-                              kTextSecondary, LV_ALIGN_TOP_RIGHT, -142, 21);
+  tileview = lv_tileview_create(screen);
+  lv_obj_set_pos(tileview, 0, 56);
+  lv_obj_set_size(tileview, 480, 382);
+  lv_obj_set_style_bg_opa(tileview, LV_OPA_TRANSP, LV_PART_MAIN);
+  lv_obj_set_style_border_width(tileview, 0, LV_PART_MAIN);
+  lv_obj_set_style_pad_all(tileview, 0, LV_PART_MAIN);
+  lv_obj_set_scrollbar_mode(tileview, LV_SCROLLBAR_MODE_OFF);
+  pages[0] = lv_tileview_add_tile(tileview, 0, 0, LV_DIR_RIGHT);
+  pages[1] =
+      lv_tileview_add_tile(tileview, 1, 0, LV_DIR_LEFT | LV_DIR_RIGHT);
+  pages[2] =
+      lv_tileview_add_tile(tileview, 2, 0, LV_DIR_LEFT | LV_DIR_RIGHT);
+  pages[3] = lv_tileview_add_tile(tileview, 3, 0, LV_DIR_LEFT);
+  for (lv_obj_t* page : pages) {
+    lv_obj_set_style_bg_opa(page, LV_OPA_TRANSP, LV_PART_MAIN);
+    lv_obj_set_style_pad_all(page, 0, LV_PART_MAIN);
+    lv_obj_clear_flag(page, LV_OBJ_FLAG_SCROLLABLE);
+  }
+  createOverviewPage(pages[0]);
+  createRequestsPage(pages[1]);
+  createSessionsPage(pages[2]);
+  createContextPage(pages[3]);
+  lv_obj_add_event_cb(tileview, updatePageDots, LV_EVENT_VALUE_CHANGED, nullptr);
+
+  time_label =
+      createLabel(screen, "--/-- --:--", &lv_font_montserrat_14, kMuted);
+  lv_obj_set_pos(time_label, 20, 452);
+  for (size_t i = 0; i < 4; ++i) {
+    page_dots[i] = lv_obj_create(screen);
+    lv_obj_remove_style_all(page_dots[i]);
+    lv_obj_set_pos(page_dots[i], 213 + static_cast<int>(i) * 18, 459);
+    lv_obj_set_size(page_dots[i], 7, 7);
+    lv_obj_set_style_radius(page_dots[i], LV_RADIUS_CIRCLE, LV_PART_MAIN);
+    lv_obj_set_style_bg_color(page_dots[i], color(i == 0 ? kGreen : kMuted),
+                              LV_PART_MAIN);
+    lv_obj_set_style_bg_opa(page_dots[i],
+                            i == 0 ? LV_OPA_COVER : LV_OPA_50, LV_PART_MAIN);
+  }
+  battery_label =
+      createLabel(screen, "BAT --%", &lv_font_montserrat_14, kMuted);
+  lv_obj_align(battery_label, LV_ALIGN_BOTTOM_RIGHT, -20, -13);
   lv_obj_add_flag(battery_label, LV_OBJ_FLAG_HIDDEN);
-
-  quota_arc = lv_arc_create(screen);
-  lv_obj_set_size(quota_arc, 304, 304);
-  lv_obj_align(quota_arc, LV_ALIGN_TOP_MID, 0, 54);
-  lv_arc_set_rotation(quota_arc, 135);
-  lv_arc_set_bg_angles(quota_arc, 0, 270);
-  lv_arc_set_range(quota_arc, 0, 100);
-  lv_arc_set_value(quota_arc, 68);
-  lv_obj_remove_style(quota_arc, nullptr, LV_PART_KNOB);
-  lv_obj_set_style_arc_width(quota_arc, 18, LV_PART_MAIN);
-  lv_obj_set_style_arc_color(quota_arc, color(kTrack), LV_PART_MAIN);
-  lv_obj_set_style_arc_width(quota_arc, 18, LV_PART_INDICATOR);
-  lv_obj_set_style_arc_color(quota_arc, color(kCyan), LV_PART_INDICATOR);
-  lv_obj_set_style_bg_opa(quota_arc, LV_OPA_TRANSP, LV_PART_MAIN);
-  lv_obj_clear_flag(quota_arc, LV_OBJ_FLAG_CLICKABLE);
-
-  quota_title_label = createLabel("7 DAY LEFT", &lv_font_montserrat_18, kCyan,
-                                  LV_ALIGN_TOP_MID, 0, 126);
-
-  quota_value_label = createLabel("68", &font_montserrat_100, kWhite,
-                                  LV_ALIGN_TOP_MID, -6, 165);
-  percent_label = lv_label_create(screen);
-  lv_label_set_text(percent_label, "%");
-  styleLabel(percent_label, &lv_font_montserrat_26, kWhite);
-  lv_obj_align_to(percent_label, quota_value_label, LV_ALIGN_OUT_RIGHT_BOTTOM,
-                  4, 0);
-
-  quota_reset_label =
-      createLabel(LV_SYMBOL_REFRESH " 2d 8h", &lv_font_montserrat_26, kCyan,
-                  LV_ALIGN_TOP_MID, 0, 285);
-
-  reset_title_label = createLabel("RESET", &lv_font_montserrat_12, kTextMuted,
-                                  LV_ALIGN_TOP_LEFT, 0, 359);
-  for (size_t i = 0; i < 6; ++i) {
-    reset_segments[i] = lv_obj_create(screen);
-    lv_obj_remove_style_all(reset_segments[i]);
-    lv_obj_set_size(reset_segments[i], kResetSegmentWidth, 6);
-    lv_obj_set_pos(reset_segments[i], 0, 362);
-    lv_obj_set_style_radius(reset_segments[i], LV_RADIUS_CIRCLE, LV_PART_MAIN);
-    lv_obj_set_style_bg_color(reset_segments[i], color(kCyan), LV_PART_MAIN);
-    lv_obj_set_style_bg_opa(reset_segments[i], LV_OPA_COVER, LV_PART_MAIN);
-  }
-  layoutResetRow(0);
-
-  lv_obj_t* metrics = lv_obj_create(screen);
-  lv_obj_set_pos(metrics, 24, 382);
-  lv_obj_set_size(metrics, 432, 74);
-  lv_obj_set_style_radius(metrics, 10, LV_PART_MAIN);
-  lv_obj_set_style_bg_color(metrics, color(0x020506), LV_PART_MAIN);
-  lv_obj_set_style_bg_opa(metrics, LV_OPA_COVER, LV_PART_MAIN);
-  lv_obj_set_style_border_color(metrics, color(kCyan), LV_PART_MAIN);
-  lv_obj_set_style_border_width(metrics, 1, LV_PART_MAIN);
-  lv_obj_set_style_pad_all(metrics, 0, LV_PART_MAIN);
-  lv_obj_clear_flag(metrics, LV_OBJ_FLAG_SCROLLABLE);
-
-  createMetricColumn(metrics, 0, 120, "TODAY", &today_value_label, false);
-  createMetricColumn(metrics, 120, 108, "LAST 7D", &week_value_label, false);
-  createMetricColumn(metrics, 228, 64, "RUN", &run_value_label, true);
-  createMetricColumn(metrics, 292, 140, "NEXT EXP", &expiry_value_label, false);
-
-  for (int x : {120, 228, 292}) {
-    lv_obj_t* divider = lv_obj_create(metrics);
-    lv_obj_remove_style_all(divider);
-    lv_obj_set_pos(divider, x, 13);
-    lv_obj_set_size(divider, 1, 54);
-    lv_obj_set_style_bg_color(divider, color(kDivider), LV_PART_MAIN);
-    lv_obj_set_style_bg_opa(divider, LV_OPA_COVER, LV_PART_MAIN);
-  }
 
   quick_actions_overlay = lv_obj_create(screen);
   lv_obj_set_size(quick_actions_overlay, 480, 480);
   lv_obj_set_pos(quick_actions_overlay, 0, 0);
-  lv_obj_set_style_bg_color(quick_actions_overlay, color(0x000000), LV_PART_MAIN);
+  lv_obj_set_style_bg_color(quick_actions_overlay, color(0x000000),
+                            LV_PART_MAIN);
   lv_obj_set_style_bg_opa(quick_actions_overlay, LV_OPA_90, LV_PART_MAIN);
   lv_obj_set_style_border_width(quick_actions_overlay, 0, LV_PART_MAIN);
   lv_obj_set_style_pad_all(quick_actions_overlay, 0, LV_PART_MAIN);
   lv_obj_clear_flag(quick_actions_overlay, LV_OBJ_FLAG_SCROLLABLE);
-
-  lv_obj_t* overlay_title = lv_label_create(quick_actions_overlay);
-  lv_label_set_text(overlay_title, "QUICK ACTIONS");
-  styleLabel(overlay_title, &lv_font_montserrat_18, kTextSecondary);
-  lv_obj_align(overlay_title, LV_ALIGN_TOP_MID, 0, 55);
-
-  createActionButton(quick_actions_overlay, "FOCUS CODEX", 105,
-                     UiAction::kFocusCodex);
-  createActionButton(quick_actions_overlay, "REFRESH", 178,
+  lv_obj_t* overlay_title =
+      createLabel(quick_actions_overlay, "GATEWAY ACTIONS",
+                  &lv_font_montserrat_18, kMuted);
+  lv_obj_align(overlay_title, LV_ALIGN_TOP_MID, 0, 72);
+  createActionButton(quick_actions_overlay, "FOCUS MAGPIE", 130,
+                     UiAction::kFocusMagpie);
+  createActionButton(quick_actions_overlay, "REFRESH", 203,
                      UiAction::kRefresh);
-  createActionButton(quick_actions_overlay, "NEW TASK", 251,
-                     UiAction::kNewTask);
-
   lv_obj_t* cancel = lv_btn_create(quick_actions_overlay);
-  lv_obj_set_pos(cancel, 50, 324);
+  lv_obj_set_pos(cancel, 50, 276);
   lv_obj_set_size(cancel, 350, 58);
   lv_obj_set_style_radius(cancel, 10, LV_PART_MAIN);
   lv_obj_set_style_bg_opa(cancel, LV_OPA_TRANSP, LV_PART_MAIN);
@@ -287,9 +399,8 @@ void uiCreate(UiActionHandler handler) {
   lv_obj_set_style_border_width(cancel, 1, LV_PART_MAIN);
   lv_obj_set_style_shadow_width(cancel, 0, LV_PART_MAIN);
   lv_obj_add_event_cb(cancel, closeOverlay, LV_EVENT_CLICKED, nullptr);
-  lv_obj_t* cancel_label = lv_label_create(cancel);
-  lv_label_set_text(cancel_label, "CANCEL");
-  styleLabel(cancel_label, &lv_font_montserrat_18, kTextSecondary);
+  lv_obj_t* cancel_label =
+      createLabel(cancel, "CANCEL", &lv_font_montserrat_18, kMuted);
   lv_obj_center(cancel_label);
   lv_obj_add_flag(quick_actions_overlay, LV_OBJ_FLAG_HIDDEN);
 
@@ -299,38 +410,32 @@ void uiCreate(UiActionHandler handler) {
   lv_obj_set_style_radius(pairing_overlay, 18, LV_PART_MAIN);
   lv_obj_set_style_bg_color(pairing_overlay, color(0x061014), LV_PART_MAIN);
   lv_obj_set_style_bg_opa(pairing_overlay, LV_OPA_COVER, LV_PART_MAIN);
-  lv_obj_set_style_border_color(pairing_overlay, color(kCyan), LV_PART_MAIN);
+  lv_obj_set_style_border_color(pairing_overlay, color(kGreen), LV_PART_MAIN);
   lv_obj_set_style_border_width(pairing_overlay, 1, LV_PART_MAIN);
   lv_obj_clear_flag(pairing_overlay, LV_OBJ_FLAG_SCROLLABLE);
   lv_obj_add_flag(pairing_overlay, LV_OBJ_FLAG_CLICKABLE);
   lv_obj_add_event_cb(pairing_overlay, closePairingOverlay, LV_EVENT_CLICKED,
                       nullptr);
-
-  lv_obj_t* pairing_title = lv_label_create(pairing_overlay);
-  lv_label_set_text(pairing_title, "ENTER ON YOUR MAC");
-  styleLabel(pairing_title, &lv_font_montserrat_18, kTextSecondary);
+  lv_obj_t* pairing_title =
+      createLabel(pairing_overlay, "PAIR MAGPIE DISPLAY",
+                  &lv_font_montserrat_18, kMuted);
   lv_obj_align(pairing_title, LV_ALIGN_TOP_MID, 0, 34);
-
-  pairing_code_label = lv_label_create(pairing_overlay);
-  lv_label_set_text(pairing_code_label, "000 000");
-  styleLabel(pairing_code_label, &lv_font_montserrat_48, kWhite);
+  pairing_code_label =
+      createLabel(pairing_overlay, "000 000", &lv_font_montserrat_48, kWhite);
   lv_obj_align(pairing_code_label, LV_ALIGN_CENTER, 0, 10);
-
-  lv_obj_t* pairing_hint = lv_label_create(pairing_overlay);
-  lv_label_set_text(pairing_hint, "TAP TO DISMISS");
-  styleLabel(pairing_hint, &lv_font_montserrat_14, kTextMuted);
+  lv_obj_t* pairing_hint =
+      createLabel(pairing_overlay, "ENTER ON YOUR MAC",
+                  &lv_font_montserrat_14, kMuted);
   lv_obj_align(pairing_hint, LV_ALIGN_BOTTOM_MID, 0, -30);
   lv_obj_add_flag(pairing_overlay, LV_OBJ_FLAG_HIDDEN);
 
-  toast = lv_label_create(screen);
-  lv_label_set_text(toast, "");
-  styleLabel(toast, &lv_font_montserrat_14, kWhite);
+  toast = createLabel(screen, "", &lv_font_montserrat_14, kWhite);
   lv_obj_set_style_bg_color(toast, color(0x182024), LV_PART_MAIN);
   lv_obj_set_style_bg_opa(toast, LV_OPA_COVER, LV_PART_MAIN);
   lv_obj_set_style_radius(toast, 8, LV_PART_MAIN);
   lv_obj_set_style_pad_hor(toast, 18, LV_PART_MAIN);
   lv_obj_set_style_pad_ver(toast, 12, LV_PART_MAIN);
-  lv_obj_align(toast, LV_ALIGN_BOTTOM_MID, 0, -96);
+  lv_obj_align(toast, LV_ALIGN_BOTTOM_MID, 0, -42);
   lv_obj_add_flag(toast, LV_OBJ_FLAG_HIDDEN);
 }
 
@@ -339,129 +444,92 @@ void uiUpdate(const AppState& state, uint32_t elapsed_seconds) {
 
   const bool linked = state.connection == ConnectionState::kLinked;
   const bool stale = state.connection == ConnectionState::kStale;
-  const bool disconnected =
-      state.connection == ConnectionState::kDisconnected;
-  const String connection =
-      String(LV_SYMBOL_BLUETOOTH) + " " + connectionLabel(state.connection);
-  lv_label_set_text(connection_label, connection.c_str());
-  const uint32_t connection_color =
-      linked ? kLinked
-             : (disconnected ? kOffline : (stale ? kAmber : kTextMuted));
+  const char* status =
+      linked ? "ONLINE" : (stale ? "STALE" : connectionLabel(state.connection));
+  lv_label_set_text_fmt(connection_label, LV_SYMBOL_BLUETOOTH " %s", status);
   lv_obj_set_style_text_color(
-      connection_label, color(connection_color),
+      connection_label, color(linked ? kGreen : (stale ? kAmber : kRed)),
       LV_PART_MAIN);
-  lv_obj_set_style_bg_color(connection_label, color(connection_color),
-                            LV_PART_MAIN);
-  lv_obj_set_style_bg_opa(
-      connection_label,
-      disconnected ? LV_OPA_30
-                   : ((linked || stale) ? LV_OPA_20 : LV_OPA_TRANSP),
-      LV_PART_MAIN);
-  lv_obj_set_style_radius(connection_label, 8, LV_PART_MAIN);
-  lv_obj_set_style_pad_hor(connection_label, 8, LV_PART_MAIN);
-  lv_obj_set_style_pad_ver(connection_label, 4, LV_PART_MAIN);
-  lv_obj_align(connection_label, LV_ALIGN_TOP_RIGHT, -24, 16);
-
-  const uint32_t data_accent =
-      linked ? kCyan : (stale ? kAmber : kTextMuted);
-  lv_obj_set_style_arc_color(quota_arc, color(data_accent),
-                             LV_PART_INDICATOR);
-  lv_obj_set_style_text_color(quota_title_label, color(data_accent),
-                              LV_PART_MAIN);
-  lv_obj_set_style_text_color(quota_reset_label, color(data_accent),
-                              LV_PART_MAIN);
 
   if (!state.data_valid) {
-    lv_arc_set_value(quota_arc, 0);
-    lv_label_set_text(quota_title_label, "CODEX LEFT");
-    lv_label_set_text(quota_value_label, "");
-    lv_obj_align(quota_value_label, LV_ALIGN_TOP_MID, -6, 165);
-    lv_obj_add_flag(percent_label, LV_OBJ_FLAG_HIDDEN);
-    lv_label_set_text(quota_reset_label, "WAITING FOR DATA");
-    lv_label_set_text(today_value_label, "-");
-    lv_label_set_text(week_value_label, "-");
-    lv_label_set_text(run_value_label, "-");
-    lv_label_set_text(expiry_value_label, "-");
-    for (lv_obj_t* segment : reset_segments) {
-      lv_obj_add_flag(segment, LV_OBJ_FLAG_HIDDEN);
-    }
+    lv_arc_set_value(success_arc, 0);
+    lv_arc_set_value(cache_arc, 0);
+    lv_label_set_text(success_value_label, "--.-");
+    lv_label_set_text(cache_value_label, "--.-");
+    lv_label_set_text(request_latest_model_label, "WAITING FOR DATA");
     return;
   }
 
-  lv_obj_clear_flag(percent_label, LV_OBJ_FLAG_HIDDEN);
-  if (state.limit_window_minutes > 0 &&
-      state.limit_window_minutes % 1440UL == 0) {
-    lv_label_set_text_fmt(quota_title_label, "%lu DAY LEFT",
-                          static_cast<unsigned long>(
-                              state.limit_window_minutes / 1440UL));
-  } else {
-    lv_label_set_text(quota_title_label, "CODEX LEFT");
+  lv_arc_set_value(success_arc, std::min<uint16_t>(state.success_permille, 1000));
+  lv_label_set_text_fmt(success_value_label, "%u.%u",
+                        state.success_permille / 10,
+                        state.success_permille % 10);
+  lv_obj_align_to(success_value_label, success_arc, LV_ALIGN_CENTER, 0, -16);
+  lv_label_set_text(calls_value_label,
+                    formatCompactTokens(state.calls_today).c_str());
+  lv_label_set_text(errors_value_label,
+                    formatCompactTokens(state.errors_today).c_str());
+  lv_obj_set_style_text_color(
+      errors_value_label, color(state.errors_today > 0 ? kAmber : kWhite),
+      LV_PART_MAIN);
+  lv_label_set_text_fmt(quota_label, "%u%%", state.remaining_percent);
+
+  const bool latest_ok = !state.latest_failed && state.latest_status >= 200 &&
+                         state.latest_status < 400;
+  const String latest = String(state.latest_status) + "  " +
+                        formatLatency(state.latest_latency_ms);
+  lv_label_set_text(request_tokens_label,
+                    formatCompactTokens(state.tokens_today).c_str());
+  lv_label_set_text(request_ttft_label,
+                    formatLatency(state.average_ttft_ms).c_str());
+  lv_label_set_text(request_latest_model_label, state.latest_model);
+  lv_label_set_text_fmt(request_status_label, "%u", state.latest_status);
+  lv_label_set_text(request_latency_label,
+                    formatLatency(state.latest_latency_ms).c_str());
+  lv_obj_set_style_text_color(request_status_label,
+                              color(latest_ok ? kGreen : kAmber), LV_PART_MAIN);
+
+  const uint64_t total_tokens = state.total_input + state.total_output +
+                                state.total_cache_read + state.total_reasoning;
+  lv_label_set_text_fmt(session_count_label, "%u", state.session_count);
+  lv_label_set_text(session_tokens_label,
+                    formatCompactTokens(total_tokens).c_str());
+  lv_label_set_text(session_cost_label,
+                    formatCost(state.total_cost_micros).c_str());
+  lv_label_set_text(top_model_label, state.top_model);
+  lv_label_set_text_fmt(top_model_calls_label, "%lu CALLS",
+                        static_cast<unsigned long>(state.top_model_calls));
+
+  lv_arc_set_value(cache_arc,
+                   std::min<uint16_t>(state.cache_hit_permille, 1000));
+  lv_label_set_text_fmt(cache_value_label, "%u.%u",
+                        state.cache_hit_permille / 10,
+                        state.cache_hit_permille % 10);
+  lv_obj_align_to(cache_value_label, cache_arc, LV_ALIGN_CENTER, 0, -16);
+  lv_label_set_text_fmt(context_input_label, "INPUT %s",
+                        formatCompactTokens(state.total_input).c_str());
+  lv_label_set_text_fmt(context_output_label, "OUTPUT %s",
+                        formatCompactTokens(state.total_output).c_str());
+  lv_label_set_text_fmt(context_cache_label, "CACHE %s",
+                        formatCompactTokens(state.total_cache_read).c_str());
+  lv_label_set_text_fmt(context_reasoning_label, "REASON %s",
+                        formatCompactTokens(state.total_reasoning).c_str());
+
+  const uint64_t parts[] = {state.total_input, state.total_output,
+                            state.total_cache_read, state.total_reasoning};
+  int x = 24;
+  int remaining_width = 432;
+  for (size_t i = 0; i < 4; ++i) {
+    const int width =
+        i == 3 ? remaining_width
+               : (total_tokens > 0
+                      ? static_cast<int>(432ULL * parts[i] / total_tokens)
+                      : 0);
+    lv_obj_set_pos(mix_segments[i], x, 282);
+    lv_obj_set_width(mix_segments[i], width);
+    x += width;
+    remaining_width -= width;
   }
-
-  lv_arc_set_value(quota_arc, std::min<uint8_t>(state.remaining_percent, 100));
-  lv_label_set_text_fmt(quota_value_label, "%u", state.remaining_percent);
-  lv_obj_align(quota_value_label, LV_ALIGN_TOP_MID, -6, 165);
-  lv_obj_align_to(percent_label, quota_value_label, LV_ALIGN_OUT_RIGHT_BOTTOM,
-                  4, 0);
-
-  const uint32_t quota_seconds =
-      state.quota_reset_seconds > elapsed_seconds
-          ? state.quota_reset_seconds - elapsed_seconds
-          : 0;
-  const uint32_t expiry_seconds =
-      state.next_credit_expiry_seconds > elapsed_seconds
-          ? state.next_credit_expiry_seconds - elapsed_seconds
-          : 0;
-  const String quota_reset =
-      String(LV_SYMBOL_REFRESH) + " " + formatCountdown(quota_seconds);
-  lv_label_set_text(quota_reset_label, quota_reset.c_str());
-
-  String today_tokens = formatCompactTokens(state.tokens_today);
-  if (state.tokens_today_estimated) {
-    today_tokens = "~" + today_tokens;
-  }
-  lv_label_set_text(today_value_label, today_tokens.c_str());
-  lv_label_set_text(week_value_label,
-                    formatCompactTokens(state.tokens_7d).c_str());
-  lv_label_set_text_fmt(run_value_label, "%u", state.active_threads);
-
-  const bool has_credits = state.reset_credits > 0;
-  const bool expiring_soon =
-      has_credits && expiry_seconds <= 48UL * 3600UL;
-  const uint32_t reset_color =
-      stale || !linked ? kTextMuted : (expiring_soon ? kAmber : kCyan);
-
-  if (state.reset_credits <= 6) {
-    lv_label_set_text(reset_title_label, "RESET");
-    layoutResetRow(state.reset_credits);
-    for (size_t i = 0; i < 6; ++i) {
-      if (i < state.reset_credits) {
-        lv_obj_clear_flag(reset_segments[i], LV_OBJ_FLAG_HIDDEN);
-        const uint32_t segment_color =
-            expiring_soon && i == 0 ? kAmber : reset_color;
-        lv_obj_set_style_bg_color(reset_segments[i], color(segment_color),
-                                  LV_PART_MAIN);
-      } else {
-        lv_obj_add_flag(reset_segments[i], LV_OBJ_FLAG_HIDDEN);
-      }
-    }
-  } else {
-    lv_label_set_text_fmt(reset_title_label, "RESET x%u", state.reset_credits);
-    layoutResetRow(0);
-    for (lv_obj_t* segment : reset_segments) {
-      lv_obj_add_flag(segment, LV_OBJ_FLAG_HIDDEN);
-    }
-  }
-
-  if (has_credits) {
-    lv_label_set_text(expiry_value_label,
-                      formatCountdown(expiry_seconds).c_str());
-  } else {
-    lv_label_set_text(expiry_value_label, "-");
-  }
-  lv_obj_set_style_text_color(expiry_value_label,
-                              color(expiring_soon ? kAmber : kWhite),
-                              LV_PART_MAIN);
 }
 
 void uiUpdateBattery(int percent, bool charging) {
@@ -469,18 +537,13 @@ void uiUpdateBattery(int percent, bool charging) {
     lv_obj_add_flag(battery_label, LV_OBJ_FLAG_HIDDEN);
     return;
   }
-
   lv_label_set_text_fmt(battery_label, charging ? "CHG %d%%" : "BAT %d%%",
                         percent);
-  const uint32_t battery_color =
-      charging ? kCyan
-               : (percent < 10 ? kOffline
-                               : (percent < 20 ? kAmber : kTextSecondary));
-  lv_obj_set_style_text_color(battery_label, color(battery_color),
-                              LV_PART_MAIN);
+  lv_obj_set_style_text_color(
+      battery_label,
+      color(charging ? kBlue : (percent < 20 ? kAmber : kMuted)), LV_PART_MAIN);
   lv_obj_clear_flag(battery_label, LV_OBJ_FLAG_HIDDEN);
-  lv_obj_align_to(battery_label, connection_label, LV_ALIGN_OUT_LEFT_MID, -12,
-                  0);
+  lv_obj_align(battery_label, LV_ALIGN_BOTTOM_RIGHT, -20, -13);
 }
 
 void uiShowQuickActions() {
@@ -491,9 +554,8 @@ void uiShowQuickActions() {
 void uiShowToast(const char* text) {
   lv_label_set_text(toast, text);
   lv_obj_clear_flag(toast, LV_OBJ_FLAG_HIDDEN);
-  lv_obj_align(toast, LV_ALIGN_BOTTOM_MID, 0, -96);
+  lv_obj_align(toast, LV_ALIGN_BOTTOM_MID, 0, -42);
   lv_obj_move_foreground(toast);
-
   if (toast_timer != nullptr) {
     lv_timer_del(toast_timer);
   }

@@ -20,7 +20,6 @@ namespace {
 constexpr uint32_t kUiRefreshMs = 1000;
 constexpr uint32_t kScreenOffLvglRefreshMs = 50;
 constexpr uint32_t kIdleScreenTimeoutMs = 15 * 1000;
-constexpr uint32_t kRunningScreenTimeoutMs = 60 * 1000;
 constexpr uint32_t kDataStaleMs = 60 * 1000;
 constexpr uint32_t kButtonDebounceMs = 35;
 constexpr uint32_t kCodexLongPressMs = 1000;
@@ -138,11 +137,7 @@ void roundDisplayArea(lv_disp_drv_t*, lv_area_t* area) {
 }
 
 void readTouch(lv_indev_drv_t*, lv_indev_data_t* data) {
-  if (!consumeTouchInterrupt()) {
-    data->state = LV_INDEV_STATE_REL;
-    return;
-  }
-
+  consumeTouchInterrupt();
   const uint8_t points =
       touch.getPoint(touch_x, touch_y, touch.getSupportTouchPoint());
   if (points == 0) {
@@ -159,14 +154,11 @@ void readTouch(lv_indev_drv_t*, lv_indev_data_t* data) {
 void handleUiAction(UiAction action) {
   const char* command = nullptr;
   switch (action) {
-    case UiAction::kFocusCodex:
-      command = "focus_codex";
+    case UiAction::kFocusMagpie:
+      command = "focus_magpie";
       break;
     case UiAction::kRefresh:
       command = "refresh";
-      break;
-    case UiAction::kNewTask:
-      command = "new_task";
       break;
     case UiAction::kReconnect:
       bleStartAdvertising();
@@ -329,7 +321,7 @@ void updateButtons() {
       [](uint32_t) {
         last_activity_ms = millis();
         setScreenOn(true);
-        handleUiAction(UiAction::kFocusCodex);
+        handleUiAction(UiAction::kFocusMagpie);
       },
       []() {
         last_activity_ms = millis();
@@ -360,19 +352,9 @@ void updateBle() {
 
   AppState received_state;
   if (bleTakeState(received_state)) {
-    const uint8_t previous_active_threads =
-        app_state.data_valid ? app_state.active_threads : 0;
-    const bool was_running =
-        app_state.data_valid && app_state.active_threads > 0;
-    const bool is_running = received_state.active_threads > 0;
     app_state = received_state;
     state_received_at_ms = millis();
-    if (received_state.active_threads > previous_active_threads) {
-      setScreenOn(true);
-      last_activity_ms = millis();
-    } else if (was_running && !is_running && screen_on) {
-      last_activity_ms = millis();
-    }
+    uiHidePairingCode();
   }
 
   if (!bleConnected()) {
@@ -399,6 +381,7 @@ void updateBle() {
 
   bool pairing_success = false;
   if (bleTakePairingFinished(pairing_success)) {
+    uiHidePairingCode();
     uiShowToast(pairing_success ? "PAIRED" : "PAIRING FAILED");
   }
 }
@@ -408,7 +391,7 @@ void updateBle() {
 void setup() {
   Serial.begin(115200);
   delay(300);
-  Serial.println("\nCodex Usage Display starting");
+  Serial.println("\nMagpie Usage Display starting");
 
   pinMode(board::kBootButton, INPUT_PULLUP);
   pinMode(board::kCodexButton, INPUT_PULLUP);
@@ -435,7 +418,7 @@ void setup() {
     uiShowToast("BLE INIT FAILED");
   }
 
-  Serial.println("Codex Usage Display ready");
+  Serial.println("Magpie Usage Display ready");
   last_activity_ms = millis();
 }
 
@@ -453,12 +436,8 @@ void loop() {
   }
 
   const uint32_t now = millis();
-  const uint32_t screen_timeout_ms =
-      app_state.data_valid && app_state.active_threads > 0
-          ? kRunningScreenTimeoutMs
-          : kIdleScreenTimeoutMs;
   if (screen_on && !uiPairingCodeVisible() &&
-      now - last_activity_ms >= screen_timeout_ms) {
+      now - last_activity_ms >= kIdleScreenTimeoutMs) {
     setScreenOn(false);
   }
 

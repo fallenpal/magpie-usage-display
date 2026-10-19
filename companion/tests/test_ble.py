@@ -78,7 +78,7 @@ class BleTests(unittest.IsolatedAsyncioTestCase):
             return None
 
         companion = BleCompanion(status, refresh)
-        command = b'{"v":1,"sid":55,"id":7,"a":"focus_codex"}'
+        command = b'{"v":4,"sid":55,"id":7,"a":"focus_magpie"}'
         companion._commands.put_nowait(command)
         companion._commands.put_nowait(command)
         client = FakeBleClient(expected_writes=3)

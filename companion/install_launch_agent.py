@@ -11,12 +11,12 @@ from pathlib import Path
 from typing import Any, Dict
 
 
-LABEL = "com.jayyao.codex-usage-display"
+LABEL = "com.jayyao.magpie-usage-display"
 
 
 def build_plist(repository: Path, home: Path) -> Dict[str, Any]:
     python = repository / "companion" / ".venv" / "bin" / "python"
-    logs = home / "Library" / "Logs" / "CodexUsageDisplay"
+    logs = home / "Library" / "Logs" / "MagpieUsageDisplay"
     return {
         "Label": LABEL,
         "ProgramArguments": [
@@ -27,7 +27,7 @@ def build_plist(repository: Path, home: Path) -> Dict[str, Any]:
         "WorkingDirectory": str(repository),
         "EnvironmentVariables": {
             "PYTHONPATH": str(repository),
-            "CODEX_DISPLAY_LOG": str(logs / "companion.log"),
+            "MAGPIE_DISPLAY_LOG": str(logs / "companion.log"),
         },
         "RunAtLoad": True,
         "KeepAlive": {"SuccessfulExit": False},
@@ -92,7 +92,7 @@ def launchctl(*args: str, check: bool = True) -> None:
 
 def main() -> None:
     parser = argparse.ArgumentParser(
-        description="Install Codex Usage Display as a macOS LaunchAgent"
+        description="Install Magpie Usage Display as a macOS LaunchAgent"
     )
     parser.add_argument("--uninstall", action="store_true")
     args = parser.parse_args()
@@ -110,7 +110,7 @@ def main() -> None:
         return
 
     prepare_environment(repository)
-    (home / "Library" / "Logs" / "CodexUsageDisplay").mkdir(
+    (home / "Library" / "Logs" / "MagpieUsageDisplay").mkdir(
         parents=True,
         exist_ok=True,
     )

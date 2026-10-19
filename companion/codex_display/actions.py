@@ -18,7 +18,7 @@ async def _run(*args: str) -> Tuple[bool, str]:
 async def perform_action(
     action: str, refresh: Callable[[], Awaitable[None]]
 ) -> Tuple[bool, str]:
-    if action not in {"refresh", "focus_codex", "new_task"}:
+    if action not in {"refresh", "focus_magpie"}:
         return False, "NOT ALLOWED"
 
     if action == "refresh":
@@ -28,21 +28,8 @@ async def perform_action(
     if platform.system() != "Darwin":
         return False, "MACOS ONLY"
 
-    if action == "focus_codex":
-        ok, _ = await _run("open", "-a", "ChatGPT")
+    if action == "focus_magpie":
+        ok, _ = await _run("open", "-a", "magpie")
         return (True, "FOCUSED") if ok else (False, "APP NOT FOUND")
-
-    if action == "new_task":
-        script = (
-            'tell application "ChatGPT" to activate\n'
-            "delay 0.3\n"
-            'tell application "System Events" to keystroke "n" using command down'
-        )
-        ok, error = await _run("osascript", "-e", script)
-        if ok:
-            return True, "NEW TASK"
-        if "not allowed" in error.lower() or "不允许" in error:
-            return False, "ALLOW ACCESSIBILITY"
-        return False, "ACTION FAILED"
 
     raise AssertionError("allowlisted action was not handled")

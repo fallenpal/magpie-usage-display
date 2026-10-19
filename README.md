@@ -1,302 +1,278 @@
-# Codex Usage Display
+# Magpie Usage Display
 
 [简体中文](README.md) | [English](README.en.md)
 
-Waveshare ESP32-S3-Touch-AMOLED-2.16 的 Arduino 固件和 macOS Companion。设备通过加密 BLE 接收本机 Codex 的真实账户用量和任务状态，不在 ESP32 中保存 Codex 凭据。
+将本机 Magpie 网关的用量和运行状态显示在一块 480 × 480 AMOLED 开发板上。
+macOS Companion 从 Magpie 本地 HTTP API 读取数据，再通过加密 BLE 发送给
+ESP32-S3。开发板不保存 API Key、账户凭据或请求内容。
 
-<p align="center">
-  <img src="docs/device-photo.jpg" alt="Codex Usage Display 实机照片" width="480">
-</p>
+> 本项目是社区项目，并非 Magpie 官方产品。它基于
+> [jayyao97/codex-usage-display](https://github.com/jayyao97/codex-usage-display)
+> 改造。
 
-> 当前状态：首个可用硬件版本。固件、BLE Companion、全局 Hook、测试和
-> PlatformIO 构建均已打通；目前只支持指定的 Waveshare 开发板和 macOS。
+## 实拍
 
-## 目录
+<table>
+  <tr>
+    <td><img src="docs/photos/overview.jpg" alt="Overview 页面实拍"></td>
+    <td><img src="docs/photos/requests.jpg" alt="Requests 页面实拍"></td>
+  </tr>
+  <tr>
+    <td align="center">Overview</td>
+    <td align="center">Requests</td>
+  </tr>
+  <tr>
+    <td><img src="docs/photos/sessions.jpg" alt="Sessions 页面实拍"></td>
+    <td><img src="docs/photos/context.jpg" alt="Context 页面实拍"></td>
+  </tr>
+  <tr>
+    <td align="center">Sessions</td>
+    <td align="center">Context</td>
+  </tr>
+</table>
 
-- [当前已实现](#当前已实现)
-- [推荐：使用 PlatformIO](#推荐使用-platformio)
-- [Arduino IDE（兼容方式）](#arduino-ide兼容方式)
-- [启动 macOS Companion](#启动-macos-companion)
-- [代码结构](#代码结构)
-- [测试](#测试)
-- [数据口径与边界](#数据口径与边界)
-- [当前限制](#当前限制)
-- [贡献、安全与许可证](#贡献安全与许可证)
+## 功能
 
-## 当前已实现
+- Magpie 官方 Logo 和网关连接状态
+- 四个可左右滑动的页面：
+  - **Overview**：今日成功率、调用数、错误数、最低剩余额度
+  - **Requests**：最近模型、状态、耗时、平均 TTFT、今日 Token
+  - **Sessions**：30 天会话数、总 Token、估算费用、最常用模型
+  - **Context**：缓存命中率及 Input / Output / Cache / Reasoning 构成
+- 15 秒刷新数据，60 秒未收到数据时显示 `STALE`
+- 60 秒无触摸或按键操作后自动熄屏
+- 触摸或 BOOT 键唤醒屏幕
+- BLE Secure Connections、六位配对码和自动重连
+- 设备快捷操作：聚焦 Magpie、立即刷新
 
-- CO5300 480 × 480 AMOLED（QSPI）
-- CST9217 触摸
-- AXP2101 电源管理
-- LVGL 8.4 首页和快捷操作浮层
-- `MM/dd HH:mm` 日期时间
-- 剩余额度、额度重置倒计时
-- 今日和最近 7 天 token
-- 运行中的任务数
-- reset credit 色段和最近过期倒计时
-- 最近过期小于等于 48 小时时使用琥珀色提示
-- BLE Secure Connections 配对、自动重连和 15 秒心跳
-- 从 Codex app-server 读取真实额度、token 和 reset credit
-- 通过全局 Codex Hook 实时感知任务开始/停止，并用本地 rollout 校准运行数
-- 设备向 Mac 回传 `focus_codex`、`refresh` 和 `new_task`
-- 60 秒无状态更新后显示 `STALE`
-- `RUN > 0` 时任务开始自动亮屏并在 60 秒后熄屏；`RUN = 0`
-  时 15 秒无操作熄屏。BLE 心跳更新数据但不延长亮屏，触摸或 BOOT
-  可唤醒，首次触摸仅唤醒不触发控件
+Context 页面只展示 Magpie 公共网关 API 能提供的真实统计，不复制 macOS App
+内部尚未公开的 Context 评分。
 
-实体键按正面观察、三个按键位于顶部时定义：
+## 硬件与系统要求
 
-| 位置 | 按键 | 行为 |
-|---|---|---|
-| 左 | BOOT / GPIO0 | 短按亮屏或熄屏；运行时长按 3 秒清除蓝牙绑定并重启；上电时按住仍进入下载模式 |
-| 中 | PWR / AXP2101 | 长按 6 秒真正关闭主电源 |
-| 右 | IO18 | 短按发送 `focus_codex`；长按 1 秒打开快捷操作 |
+- [Waveshare ESP32-S3-Touch-AMOLED-2.16](https://www.waveshare.com/esp32-s3-touch-amoled-2.16.htm)
+- 支持数据传输的 USB-C 线
+- macOS
+- Python 3.9+；构建 ESP32 固件推荐 Python 3.11
+- 已安装并正在运行的 Magpie
+- PlatformIO
 
-`focus_codex` 会激活 Mac 上的 ChatGPT/Codex App；`refresh` 立即重新读取数据；`new_task` 使用 macOS 辅助功能发送 `⌘N`。
+目前只验证了上述开发板和 macOS。
 
-## 推荐：使用 PlatformIO
+## 工作原理
 
-项目主要使用 PlatformIO，并固定到与 Waveshare Arduino 示例相同的主要依赖版本：
+```text
+Magpie http://127.0.0.1:3425
+  ├─ /v1/magpie/quotas
+  ├─ /v1/magpie/usage
+  └─ /v1/magpie/usage/requests
+                 │
+                 ▼
+       macOS Python Companion
+                 │  加密 BLE
+                 ▼
+       ESP32-S3 + LVGL + AMOLED
+```
 
-- Arduino-ESP32 3.3.5
-- LVGL 8.4.0
-- Arduino_GFX 1.6.4
-- SensorLib 0.3.3
-- XPowersLib 0.2.6
+默认只访问本机 `http://127.0.0.1:3425`。可通过 `MAGPIE_URL` 环境变量或
+`--magpie-url` 参数覆盖。
 
-安装 PlatformIO 后执行：
+## 1. 获取代码
+
+```bash
+git clone https://github.com/peterroe/magpie-usage-display.git
+cd magpie-usage-display
+```
+
+## 2. 准备 PlatformIO
+
+推荐在项目目录创建独立 Python 环境：
+
+```bash
+python3 -m venv .pio-venv
+source .pio-venv/bin/activate
+python -m pip install --upgrade pip platformio
+```
+
+确认使用的是项目环境：
+
+```bash
+which pio
+pio --version
+```
+
+`which pio` 应优先显示项目中的 `.pio-venv/bin/pio`。
+
+## 3. 编译固件
 
 ```bash
 pio run
 ```
 
-固件输出：
+成功后固件位于：
 
 ```text
 .pio/build/esp32-s3-touch-amoled-216/firmware.bin
 ```
 
-连接开发板后烧录并查看串口：
+## 4. 连接并烧录开发板
+
+用 USB-C 数据线连接开发板，查看串口：
 
 ```bash
-pio run -t upload
-pio device monitor
+ls /dev/cu.*
 ```
 
-如果首次烧录时没有识别到下载端口，按住 BOOT、连接 USB-C，看到端口后松开 BOOT。烧录会替换设备中现有固件。
+找到类似 `/dev/cu.usbmodem11201` 的端口，然后上传：
 
-## Arduino IDE（兼容方式）
+```bash
+pio run -t upload --upload-port /dev/cu.usbmodem11201
+```
 
-直接打开 [esp32/esp32.ino](esp32/esp32.ino)，不要在文件选择器里只选文件夹。Arduino IDE 会同时编译 `src/` 中的实际源码。
+请将端口替换为你的实际设备。
 
-在 Boards Manager 中安装 **esp32 by Espressif Systems**。当前已验证 3.3.10 可以完整编译。`Arduino Nano ESP32` 属于另一套 board package，不适用于这块 Waveshare 板。
+如果找不到端口或无法连接：
 
-当前经过 Arduino IDE 构建验证的库版本：
+1. 拔下 USB-C。
+2. 按住开发板左侧 `BOOT`。
+3. 保持按住并重新插入 USB-C。
+4. 等待约 2 秒后松开。
+5. 重新运行 `ls /dev/cu.*` 和上传命令。
 
-- `ArduinoJson` 7.4.2
-- `GFX Library for Arduino` 1.6.7
-- `SensorLib` 0.4.1
-- `XPowersLib` 0.3.3
-- `lvgl` 8.4.0，不要安装 LVGL 9
+烧录成功后设备会自动重启，未连接 Companion 时显示 `OFFLINE`。
 
-然后选择：
+## 5. 验证 Magpie 数据
 
-- Board：`ESP32S3 Dev Module`
-- Port：设备对应的 `/dev/cu.usbmodem...`
-- Flash Size：`16MB`
-- PSRAM：`OPI PSRAM`
-- USB CDC On Boot：`Enabled`
-- Upload Mode：`UART0 / Hardware CDC`
+确保 Magpie 正在运行，然后执行：
 
-点击左上角 Verify 编译，确认通过后再点击 Upload。首次找不到下载端口时，按住 BOOT、连接 USB-C，识别到端口后松开 BOOT。
+```bash
+./companion/run.sh --once
+```
 
-## 启动 macOS Companion
+成功时会输出一行 BLE v4 JSON 快照。该命令只读取数据，不连接蓝牙。
 
-需要 macOS、Python 3.9 或更高版本，以及已经登录的 ChatGPT/Codex App。Companion 会启动本机 `codex app-server`，复用现有登录，不需要 API Key。
-
-在终端进入本项目目录后执行：
+## 6. 启动 Companion
 
 ```bash
 ./companion/run.sh
 ```
 
-脚本首次运行会在 `companion/.venv` 创建隔离环境并安装 `bleak`。macOS 首次询问蓝牙权限时允许 Terminal。
+首次运行会自动创建 `companion/.venv` 并安装 `bleak`。macOS 询问蓝牙权限时
+请选择允许。
 
-首次安全配对：
+### 首次配对
 
-1. 烧录固件并保持设备开机，顶部显示 `OFFLINE`。
-2. 启动 Companion，它会发现 `Codex Display` 并发起安全配对。
-3. 设备显示 `123 456` 形式的随机 6 位码。
-4. 在 Mac 系统配对框中输入相同数字。
-5. 收到首个真实快照后，状态变为 `LINKED`。
+只有尚未绑定的设备才会显示六位验证码：
 
-只验证 Codex 数据、不连接 BLE：
+1. 开发板显示六位数字。
+2. 在 macOS 蓝牙配对框中输入相同数字。
+3. 收到第一包数据后状态变为 `ONLINE`。
 
-```bash
-./companion/run.sh --once
-```
+后续连接会复用绑定密钥，不再要求输入验证码。
 
-输出是一条与固件实际接收内容相同的紧凑 JSON。Companion 默认每 15 秒发送心跳，每 60 秒重新读取完整数据。
+需要换电脑或重新配对时，在设备正常运行状态下长按左侧 `BOOT` 约 3 秒。看到
+`PAIRING CLEARED` 后设备会重启。不要在上电时按住 BOOT，否则会进入下载模式。
 
-### macOS 后台常驻
+## 7. 后台自动运行
 
-先使用 `./companion/run.sh` 完成首次配对并确认运行正常，然后停止手动启动的
-Companion，安装用户级 LaunchAgent：
+先完成一次手动配对，再停止手动运行的 Companion：
 
 ```bash
 python3 companion/install_launch_agent.py
 ```
 
-安装器会提前创建 `companion/.venv` 并安装依赖，再使用固定的 Python 环境启动
-Companion。它会在登录后自动运行，并只在异常退出时重新启动。日志达到 1 MiB
-后轮转并保留一份历史，位于：
-
-```text
-~/Library/Logs/CodexUsageDisplay/companion.log
-~/Library/Logs/CodexUsageDisplay/companion.log.1
-```
-
-卸载并停止后台服务：
+卸载：
 
 ```bash
 python3 companion/install_launch_agent.py --uninstall
 ```
 
-未连接设备时，Companion 仍以 1 秒间隔处理 Hook 文件，但暂停每 30 秒的
-`thread/list` 校准。BLE 每次扫描 10 秒，连续失败时逐步退避到最多休眠 60 秒。
-重新连接后会先完整刷新 Codex 数据，再发送第一包。app-server 异常退出时，
-Companion 会一并退出并由 LaunchAgent 重新启动。
-
-LaunchAgent 使用的 Python 进程可能需要单独获得 macOS 蓝牙权限；`NEW TASK`
-仍需要辅助功能权限。首次安装后请实测蓝牙关闭/开启、睡眠/唤醒和重新登录。
-
-### 实时 RUN Hook
-
-执行安装器，将 RUN Hook 合并进现有的全局 `~/.codex/hooks.json`：
-
-```bash
-python3 companion/install_hook.py
-```
-
-安装器可重复执行，不会重复添加，也会保留已有的其他 Hook。首次启用本地 token
-估算时，可手动初始化一次 UTC 当天已有的数据：
-
-```bash
-/usr/bin/python3 .codex/hooks/codex_display_event.py --bootstrap
-```
-
-初始化不是安装或启动流程的一部分；日常只在 Hook 触发时读取对应 transcript
-的新增部分。卸载时执行：
-
-```bash
-python3 companion/install_hook.py --uninstall
-```
-
-全局 Hook 监听所有 Codex 项目的 `UserPromptSubmit` 和 `Stop`，并通过安装时
-计算出的绝对路径调用本仓库的 `.codex/hooks/codex_display_event.py`。Hook
-不直接操作蓝牙，只把
-`session_id`、`turn_id`、`transcript_path` 和事件类型追加到：
+日志位于：
 
 ```text
-~/Library/Caches/CodexUsageDisplay/hook-events.jsonl
+~/Library/Logs/MagpieUsageDisplay/companion.log
+~/Library/Logs/MagpieUsageDisplay/companion.log.1
 ```
 
-Companion 从该队列接收提示：
+LaunchAgent 进程可能需要在“系统设置 → 隐私与安全性 → 蓝牙”中单独授权。
 
-1. `UserPromptSubmit` 先建立临时运行状态并立即推送 BLE。
-2. Companion 在对应 transcript 中找到同一 `turn_id` 的 `task_started`
-   后确认运行；10 秒内没有确认则撤销临时状态。
-3. `Stop` 只标记为待停止，不直接减少 RUN。
-4. 对应 transcript 出现同一 `turn_id` 的 `task_complete` 后才减少 RUN，
-   并立即推送 BLE。
-5. BLE 已连接时，每 30 秒额外读取一次最近任务进行校准，修复漏 Hook 或进程异常。
+## 操作
 
-Hook 写入和 Companion 轮转共享一个跨进程文件锁，并使用追加写入，多个 Codex
-任务同时触发也不会互相覆盖。事件文件达到 1 MiB 后，Companion 会将它轮转为
-`hook-events.jsonl.1` 并创建新队列；只保留一份历史，两个文件合计最多约
-2 MiB。
+面对屏幕、三个实体键位于顶部时：
 
-`Stop` Hook 同时将本机新增 token 累计到：
+| 位置 | 按键 | 行为 |
+|---|---|---|
+| 左 | BOOT / GPIO0 | 短按切换屏幕；运行时长按 3 秒清除 BLE 绑定 |
+| 中 | PWR / AXP2101 | 长按 6 秒关闭主电源 |
+| 右 | IO18 | 短按聚焦 Magpie；长按 1 秒打开快捷操作 |
 
-```text
-~/Library/Caches/CodexUsageDisplay/local-usage.json
+- 左右滑动：切换四个数据页面
+- 触摸熄灭的屏幕：仅唤醒，不触发页面操作
+- 60 秒无操作：自动熄屏；BLE 数据仍在后台更新
+
+## 常见问题
+
+### 没有 `/dev/cu.usbmodem...`
+
+- 确认 USB-C 线支持数据传输
+- 直接连接 Mac，避免先经过扩展坞
+- 换一个 USB 接口
+- 按照上面的 BOOT 下载模式步骤重试
+
+### 屏幕显示 `OFFLINE`
+
+确认 Companion 正在运行：
+
+```bash
+./companion/run.sh
 ```
 
-官方当天 daily bucket 尚未出现时，设备使用该值并在 `TODAY` 前显示 `~`；
-官方桶出现后自动切回账户级官方值。状态文件使用同一个跨进程锁和原子替换，
-Companion 重启不需要重新扫描全部 rollout。
+### 屏幕显示 `STALE`
 
-Hook 不保存 prompt 或 assistant 回复。它对本机所有 Codex 项目生效，但脚本
-源码仍保存在本仓库，移动仓库后需要同步修改 `~/.codex/hooks.json` 中的绝对
-路径；重新运行安装器即可自动更新。Codex 首次发现或每次修改 Hook 后会要求审核；在 Hook 管理界面确认
-信任，然后新开一个任务或重启当前任务使配置稳定生效。
+检查 Magpie 和本地 API：
 
-如果提示蓝牙关闭，但 macOS 菜单栏显示蓝牙已开启，请到“系统设置 → 隐私与安全性 → 蓝牙”允许 Terminal，然后重新运行。
-
-`NEW TASK` 第一次使用时还需要在“隐私与安全性 → 辅助功能”允许 Terminal；如果不授予，该动作会返回 `ALLOW ACCESSIBILITY`，其他功能不受影响。
-
-更换电脑时，先停止旧电脑上的 Companion，再在设备正常运行时长按左侧 BOOT 3 秒。看到 `PAIRING CLEARED` 后设备会自动重启；随后在新电脑运行 `./companion/run.sh`，输入设备显示的新六位配对码。不要在开机或复位过程中按住 BOOT，否则会进入 ESP32 下载模式。
-
-## 代码结构
-
-```text
-esp32/esp32.ino          Arduino IDE 工程入口
-lv_conf.h                LVGL 8 配置
-src/board_config.h       板级引脚和显示参数
-src/app_state.h          首页数据模型
-src/ble_bridge.*         加密 BLE GATT、状态解析和动作回传
-src/ui.h                 UI 对外接口
-src/main.cpp             显示、触摸、电源、按键和主循环
-src/app_state.cpp        时间、token 和倒计时格式化
-src/ui.cpp               480 × 480 LVGL 页面
-src/fonts/               主百分比定制字体
-companion/codex_display/ macOS Companion 源码
-companion/tests/         数据口径和协议测试
-companion/run.sh         Companion 一键启动脚本
-companion/install_launch_agent.py macOS 后台常驻安装与卸载
-companion/install_hook.py 全局 Hook 安装与卸载
-.codex/hooks/            全局 Hook 调用的本地事件转发脚本
-docs/BLE_PROTOCOL.md     BLE UUID、消息格式和安全约束
-PRODUCT_PLAN.md          产品、连接和交互方案
+```bash
+curl http://127.0.0.1:3425/
+./companion/run.sh --once
 ```
 
-详细线协议见 [docs/BLE_PROTOCOL.md](docs/BLE_PROTOCOL.md)。
+### 查看设备日志
 
-## 测试
+```bash
+pio device monitor
+```
+
+按 `Control-C` 退出。烧录前需要先关闭串口监视器。
+
+## 开发与测试
 
 ```bash
 python3 -m unittest discover -s companion/tests -v
-./companion/run.sh --once
 pio run
 ```
 
-Arduino IDE 使用上文相同的板型和参数点击 Verify。当前版本已在 Arduino-ESP32 3.3.10 和 PlatformIO/Arduino-ESP32 3.3.5 两套环境编译通过。
+BLE v4 协议见 [docs/BLE_PROTOCOL.md](docs/BLE_PROTOCOL.md)。
 
-## 数据口径与边界
+## 安全与隐私
 
-- 额度、窗口时长、重置时间和 reset credit 来自 `account/rateLimits/read`。
-- `TODAY` 和 `LAST 7D` 来自 `account/usage/read` 的 UTC daily buckets；
-  每天在新加坡时间 08:00 切换到新的统计日。
-- 如果响应中完全缺少当天 bucket，`TODAY` 临时显示全局 Hook 从本机
-  transcript 累计的 `~估算值`；当天 bucket 存在且值为 0 时仍视为官方值。
-  `LAST 7D` 始终只使用服务器数据。
-- 独立 app-server 无法直接读取 Codex Desktop 进程内存中的 active 状态。所有项目的任务由全局 Hook 提供实时提示，再使用同一 `turn_id` 的 rollout 边界确认；漏 Hook 情况由 30 秒定期扫描校准。异常中断的旧记录最多保留 30 分钟。
-- `focus_codex` 目前聚焦 Codex App，不保证直接跳转到特定 thread。
-- 设备不保存 prompt、thread 名称、工作目录、ChatGPT Cookie 或 Codex Token。
+- ESP32 不保存 Magpie 凭据、请求正文或会话内容
+- BLE 状态与命令特征要求加密访问
+- 设备只允许 `focus_magpie` 和 `refresh` 两个语义操作
+- 不接受任意 shell 命令或 prompt
 
-## 当前限制
+安全问题请参阅 [SECURITY.md](SECURITY.md)。
 
-- Companion 目前仅支持 macOS，并依赖本机已经登录的 ChatGPT/Codex App。
-- Codex app-server 和本地 transcript 并不是面向第三方长期稳定的公共数据
-  接口；Codex 升级后可能需要同步适配。
-- 全局 Hook 提供实时提示，但 RUN 仍以 transcript 边界和定期扫描校准为准。
-- 固件没有 OTA；升级需要通过 USB 重新烧录。
-- 目前只验证了 Waveshare ESP32-S3-Touch-AMOLED-2.16。
+## 限制
 
-## 贡献、安全与许可证
+- Companion 当前仅支持 macOS
+- 只验证了 Waveshare ESP32-S3-Touch-AMOLED-2.16
+- 固件没有 OTA，升级需要 USB 烧录
+- Context 页面使用公共 API 聚合数据，不包含 Magpie App 内部评分
 
-- 贡献流程见 [CONTRIBUTING.md](CONTRIBUTING.md)。
-- 安全问题请按 [SECURITY.md](SECURITY.md) 私下报告。
-- 项目代码使用 [MIT License](LICENSE)。
-- Montserrat 字体子集及构建依赖声明见
-  [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md)。
+## 许可证与商标
+
+代码使用 [MIT License](LICENSE)。原项目版权和第三方字体声明保留在
+[THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md)。
+
+Magpie 名称和 Logo 属于其各自权利人。本项目对 Logo 的使用仅用于标识与 Magpie
+的兼容性，不表示官方背书。

@@ -3,13 +3,13 @@ requires = ["setuptools>=61"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "codex-usage-display"
-version = "0.1.0"
-description = "macOS BLE companion for the Codex Usage Display"
+name = "magpie-usage-display"
+version = "0.4.0"
+description = "macOS BLE companion for the Magpie Usage Display"
 requires-python = ">=3.9"
 dependencies = ["bleak>=0.22,<2"]
 license = {text = "MIT"}
-authors = [{name = "Jay Yao"}]
+authors = [{name = "Jay Yao"}, {name = "Peter Roe"}]
 classifiers = [
   "License :: OSI Approved :: MIT License",
   "Operating System :: MacOS",
@@ -17,12 +17,12 @@ classifiers = [
   "Programming Language :: Python :: 3.9",
 ]
 
-[project.urls]
-Repository = "https://github.com/jayyao97/codex-usage-display"
-Issues = "https://github.com/jayyao97/codex-usage-display/issues"
-
 [project.scripts]
-codex-usage-display = "codex_display.main:main"
+magpie-usage-display = "codex_display.main:main"
+
+[project.urls]
+Repository = "https://github.com/peterroe/magpie-usage-display"
+Issues = "https://github.com/peterroe/magpie-usage-display/issues"
 
 [tool.setuptools.packages.find]
 where = ["."]

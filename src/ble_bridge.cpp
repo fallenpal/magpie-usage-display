@@ -15,13 +15,13 @@
 
 namespace {
 
-constexpr char kDeviceName[] = "Codex Display";
+constexpr char kDeviceName[] = "Magpie Display";
 constexpr char kServiceUuid[] = "7d8b6c20-8f6d-4b44-a0f8-1b6570c0de01";
 constexpr char kStatusUuid[] = "7d8b6c20-8f6d-4b44-a0f8-1b6570c0de02";
 constexpr char kCommandUuid[] = "7d8b6c20-8f6d-4b44-a0f8-1b6570c0de03";
 constexpr char kResultUuid[] = "7d8b6c20-8f6d-4b44-a0f8-1b6570c0de04";
 constexpr char kDeviceInfoUuid[] = "7d8b6c20-8f6d-4b44-a0f8-1b6570c0de05";
-constexpr uint8_t kProtocolVersion = 1;
+constexpr uint8_t kProtocolVersion = 4;
 constexpr uint32_t kStatusWatchdogMs = 45 * 1000;
 
 BLEServer* server = nullptr;
@@ -36,6 +36,8 @@ volatile uint32_t last_status_at_ms = 0;
 uint32_t next_request_id = 1;
 uint32_t command_session_id = 0;
 uint32_t last_sequence = 0;
+bool has_bonded_device = false;
+bool pairing_code_announced = false;
 
 class ServerCallbacks final : public BLEServerCallbacks {
  public:
@@ -85,13 +87,29 @@ class StatusCallbacks final : public BLECharacteristicCallbacks {
     state.limit_window_minutes = document["u"] | 0UL;
     state.quota_reset_seconds = document["q"] | 0UL;
     state.tokens_today = document["d"] | 0ULL;
-    state.tokens_today_estimated = (document["e"] | 0) == 1;
     state.tokens_7d = document["w"] | 0ULL;
-    state.reset_credits =
-        min<uint8_t>(document["c"] | 0, static_cast<uint8_t>(255));
-    state.next_credit_expiry_seconds = document["x"] | 0UL;
-    state.active_threads =
-        min<uint8_t>(document["a"] | 0, static_cast<uint8_t>(255));
+    state.calls_today = document["f"] | 0UL;
+    state.errors_today = document["z"] | 0UL;
+    state.success_permille =
+        min<uint16_t>(document["y"] | 0, static_cast<uint16_t>(1000));
+    state.average_ttft_ms = document["l"] | 0UL;
+    strlcpy(state.latest_model, document["m"] | "-",
+            sizeof(state.latest_model));
+    state.latest_status = document["h"] | 0;
+    state.latest_latency_ms = document["n"] | 0UL;
+    state.latest_failed = (document["b"] | 0) == 1;
+    JsonArray extended = document["x"].as<JsonArray>();
+    state.session_count = extended[0] | 0;
+    state.total_calls = extended[1] | 0UL;
+    state.total_input = extended[2] | 0ULL;
+    state.total_output = extended[3] | 0ULL;
+    state.total_cache_read = extended[4] | 0ULL;
+    state.total_reasoning = extended[5] | 0ULL;
+    state.total_cost_micros = extended[6] | 0UL;
+    state.cache_hit_permille =
+        min<uint16_t>(extended[7] | 0, static_cast<uint16_t>(1000));
+    strlcpy(state.top_model, extended[8] | "-", sizeof(state.top_model));
+    state.top_model_calls = extended[9] | 0UL;
     state.connection = ConnectionState::kLinked;
     state.time_valid = state.unix_time > 0;
     state.data_valid = true;
@@ -126,6 +144,11 @@ class ResultCallbacks final : public BLECharacteristicCallbacks {
 class SecurityCallbacks final : public BLESecurityCallbacks {
  public:
   void onPassKeyNotify(uint32_t passkey) override {
+    if (has_bonded_device) {
+      Serial.println("[ble] bonded reconnect; passkey UI suppressed");
+      return;
+    }
+    pairing_code_announced = true;
     xQueueOverwrite(pairing_code_queue, &passkey);
     Serial.printf("[ble] pairing passkey %06lu\n",
                   static_cast<unsigned long>(passkey));
@@ -138,7 +161,13 @@ class SecurityCallbacks final : public BLESecurityCallbacks {
 #if defined(CONFIG_BLUEDROID_ENABLED)
   void onAuthenticationComplete(esp_ble_auth_cmpl_t result) override {
     const bool success = result.success;
-    xQueueOverwrite(pairing_finished_queue, &success);
+    if (success) {
+      has_bonded_device = true;
+    }
+    if (pairing_code_announced) {
+      xQueueOverwrite(pairing_finished_queue, &success);
+      pairing_code_announced = false;
+    }
     Serial.printf("[ble] pairing %s\n", success ? "complete" : "failed");
   }
 #endif
@@ -158,6 +187,9 @@ bool bleBegin() {
   }
 
   BLEDevice::init(kDeviceName);
+#if defined(CONFIG_BLUEDROID_ENABLED)
+  has_bonded_device = esp_ble_get_bond_device_num() > 0;
+#endif
   command_session_id = esp_random();
   if (command_session_id == 0) {
     command_session_id = 1;
@@ -200,14 +232,14 @@ bool bleBegin() {
 
   BLECharacteristic* device_info = service->createCharacteristic(
       kDeviceInfoUuid, BLECharacteristic::PROPERTY_READ);
-  device_info->setValue("{\"v\":1,\"fw\":\"0.1.0\",\"screen\":\"480x480\"}");
+  device_info->setValue("{\"v\":4,\"fw\":\"0.4.0\",\"screen\":\"480x480\"}");
 
   service->start();
   BLEAdvertising* advertising = BLEDevice::getAdvertising();
   advertising->addServiceUUID(kServiceUuid);
   advertising->setScanResponse(true);
   BLEDevice::startAdvertising();
-  Serial.println("[ble] advertising as Codex Display");
+  Serial.println("[ble] advertising as Magpie Display");
   return true;
 }
 
@@ -260,7 +292,8 @@ bool bleSendAction(const char* action) {
   char message[96];
   const uint32_t request_id = next_request_id++;
   snprintf(message, sizeof(message),
-           "{\"v\":1,\"sid\":%lu,\"id\":%lu,\"a\":\"%s\"}",
+           "{\"v\":%u,\"sid\":%lu,\"id\":%lu,\"a\":\"%s\"}",
+           static_cast<unsigned int>(kProtocolVersion),
            static_cast<unsigned long>(command_session_id),
            static_cast<unsigned long>(request_id), action);
   command_characteristic->setValue(message);

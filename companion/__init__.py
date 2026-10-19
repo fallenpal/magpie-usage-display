@@ -1,1 +1,1 @@
-"""Codex Usage Display desktop companion."""
+"""Magpie Usage Display desktop companion."""

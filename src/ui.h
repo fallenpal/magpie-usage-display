@@ -3,9 +3,8 @@
 #include "app_state.h"
 
 enum class UiAction : uint8_t {
-  kFocusCodex,
+  kFocusMagpie,
   kRefresh,
-  kNewTask,
   kReconnect,
 };
 

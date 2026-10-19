@@ -6,7 +6,7 @@ from companion.install_launch_agent import build_plist
 
 class InstallLaunchAgentTests(unittest.TestCase):
     def test_plist_runs_prepared_venv_and_restarts_only_after_failure(self):
-        repository = Path("/tmp/codex-usage-display")
+        repository = Path("/tmp/magpie-usage-display")
         home = Path("/Users/example")
 
         config = build_plist(repository, home)
@@ -25,8 +25,8 @@ class InstallLaunchAgentTests(unittest.TestCase):
             str(repository),
         )
         self.assertEqual(
-            config["EnvironmentVariables"]["CODEX_DISPLAY_LOG"],
-            str(home / "Library/Logs/CodexUsageDisplay/companion.log"),
+            config["EnvironmentVariables"]["MAGPIE_DISPLAY_LOG"],
+            str(home / "Library/Logs/MagpieUsageDisplay/companion.log"),
         )
         self.assertTrue(config["RunAtLoad"])
         self.assertEqual(config["KeepAlive"], {"SuccessfulExit": False})
