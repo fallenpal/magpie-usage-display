@@ -143,9 +143,11 @@ need separate Bluetooth permission in macOS System Settings.
 |---|---|---|
 | Left | BOOT / GPIO0 | Short press toggles the screen; hold 3 seconds to clear BLE bonds |
 | Center | PWR / AXP2101 | Hold 6 seconds to cut main power |
-| Right | IO18 | Short press focuses Magpie; hold 1 second for quick actions |
+| Right | IO18 / Focus | Short press cycles data pages; hold 1 second for quick actions |
 
 - Swipe left or right to switch pages.
+- You can also press the right Focus key to cycle through pages without swiping.
+- If the screen is off, the first Focus press only wakes it; press again to switch pages.
 - Touching a sleeping screen wakes it without activating a control.
 - BLE continues updating while the screen is off.
 

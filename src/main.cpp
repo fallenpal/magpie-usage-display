@@ -320,8 +320,11 @@ void updateButtons() {
       codex_button, kCodexLongPressMs,
       [](uint32_t) {
         last_activity_ms = millis();
+        const bool was_screen_on = screen_on;
         setScreenOn(true);
-        handleUiAction(UiAction::kFocusMagpie);
+        if (was_screen_on && !uiModalVisible()) {
+          uiCyclePage();
+        }
       },
       []() {
         last_activity_ms = millis();

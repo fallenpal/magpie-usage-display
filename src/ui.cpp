@@ -140,7 +140,7 @@ void createRing(lv_obj_t* parent, lv_obj_t** arc, lv_obj_t** value,
   lv_obj_align_to(caption_label, *arc, LV_ALIGN_CENTER, 0, 49);
 }
 
-void updatePageDots(lv_event_t*) {
+void refreshPageDots() {
   lv_obj_t* active = lv_tileview_get_tile_act(tileview);
   for (size_t i = 0; i < 4; ++i) {
     const bool selected = pages[i] == active;
@@ -149,6 +149,10 @@ void updatePageDots(lv_event_t*) {
     lv_obj_set_style_bg_opa(page_dots[i],
                             selected ? LV_OPA_COVER : LV_OPA_50, LV_PART_MAIN);
   }
+}
+
+void updatePageDots(lv_event_t*) {
+  refreshPageDots();
 }
 
 void dispatchAction(lv_event_t* event) {
@@ -549,6 +553,32 @@ void uiUpdateBattery(int percent, bool charging) {
 void uiShowQuickActions() {
   lv_obj_clear_flag(quick_actions_overlay, LV_OBJ_FLAG_HIDDEN);
   lv_obj_move_foreground(quick_actions_overlay);
+}
+
+void uiCyclePage() {
+  if (tileview == nullptr) {
+    return;
+  }
+
+  lv_obj_t* active = lv_tileview_get_tile_act(tileview);
+  size_t current = 0;
+  for (size_t i = 0; i < 4; ++i) {
+    if (pages[i] == active) {
+      current = i;
+      break;
+    }
+  }
+
+  const size_t next = (current + 1) % 4;
+  lv_obj_set_tile(tileview, pages[next], LV_ANIM_ON);
+  refreshPageDots();
+}
+
+bool uiModalVisible() {
+  return (quick_actions_overlay != nullptr &&
+          !lv_obj_has_flag(quick_actions_overlay, LV_OBJ_FLAG_HIDDEN)) ||
+         (pairing_overlay != nullptr &&
+          !lv_obj_has_flag(pairing_overlay, LV_OBJ_FLAG_HIDDEN));
 }
 
 void uiShowToast(const char* text) {
