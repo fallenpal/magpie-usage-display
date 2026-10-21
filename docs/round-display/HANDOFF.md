@@ -1,6 +1,6 @@
 ## 阶段性交接记录
 
-日期：2026-10-22。阶段：Companion 与固件实现完成，Agent B 已完成串行集成、自动化测试与目标板构建，秘密扫描来源核实仍有保留项。真机烧录未进行。
+日期：2026-10-22。阶段：Companion 与固件实现完成，Agent B 已完成串行集成、自动化测试与目标板构建，Agent A 已复核并接收交接。真机烧录未进行。
 
 ### 分支与提交
 
@@ -8,7 +8,7 @@
 | --- | --- | --- | --- |
 | `/Users/bruce/dev/magpie-usage-display-round-firmware` | `codex/round-display-ui` | `5b2635c` | 工作区干净 |
 | `/Users/bruce/dev/magpie-usage-display-round-companion` | `codex/provider-usage` | `4e0b97c` | 工作区干净，已合入 main |
-| `/Users/bruce/dev/magpie-usage-display-round` | `main` | `49fa7ea` | 集成验收基线，两条分支均已合入 |
+| `/Users/bruce/dev/magpie-usage-display-round` | `main` | `edcd062` | 交接已接收，两条分支均已合入 |
 
 两条分支都从 `ae7ede4` 出发。没有推送，没有个人 origin，没有创建 GitHub Fork。
 
@@ -80,8 +80,9 @@
 
 - [x] BLE v5 协议冻结，Companion 编码和固件解析使用同一 fixture。
 - [x] 批次原子提交、32 条上限、250 bytes 上限、5 秒超时、序列忽略规则有测试。
-- [x] 1.75C 目标板构建通过，2.16 回归构建通过。
+- [x] 1.75C 目标板构建通过（本轮重跑）；2.16 回归构建为历史结果，本轮未重跑。
 - [x] 466×466 四页布局和 Usage 供应商切换已实现。
 - [x] OFFLINE、STALE、SYNCING、ONLINE 分开显示，过期数据保留并降亮。
 - [x] 两条分支合入 main 并通过自动化测试和 1.75C 构建。
+- [x] Agent A 复核测试、构建、合并历史和秘密扫描候选，交接已接收。
 - [ ] 真机硬件和端到端 BLE 验证。

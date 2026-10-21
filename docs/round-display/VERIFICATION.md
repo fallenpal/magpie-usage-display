@@ -97,6 +97,32 @@ Agent B 于 2026-10-22 在主 checkout 的 `main` 独立验证。验收基线为
 
 候选均位于测试及 fixture，但本轮未独立证实所有输入标识的来源，因此不能断言不存在真实账户标识。扫描不覆盖 Git 历史、忽略的依赖和构建缓存，也不对二进制图片做 OCR；模式扫描不能证明不存在任意形式的请求正文。此限制保留为交接风险。
 
+### Agent A 验收复核
+
+Agent A 于 2026-10-22 复核 `edcd062`。确认 main 工作区干净，`87c3b18` 的父提交为 `ae7ede4` 和 `4e0b97c`，`49fa7ea` 的父提交为 `87c3b18` 和 `5b2635c`，`dafe2d9` 不是 main 祖先。仓库只有 upstream remote，没有个人 origin，main 领先 upstream 10 个提交，没有推送。
+
+独立重跑结果：
+
+| 项目 | 结果 |
+| --- | --- |
+| Companion 测试 | 43 个通过，0.128 秒 |
+| 固件 native 测试 | 9 个通过，0.386 秒 |
+| 1.75C 构建 | 通过，18.923 秒，增量构建 |
+| Flash 与 RAM | 1,243,179 bytes，9.5%；145,028 bytes，44.3% |
+| 固件镜像 | 1,243,584 bytes |
+| fixture SHA-256 | 两份均为 `9efd774f0482cca959c48d4e7c5149428cabd9b56b2786857e6180e8623c99c6` |
+
+秘密扫描的 6 处候选已逐项复核，全部为合成测试数据：
+
+- `codex_claude_quotas.json:6` 和 `:26` 的 `claude-user-123`、`codex-user-456` 是测试账户标签。
+- `test_metrics.py:230` 的 `person@example.com` 使用 RFC 2606 保留域名。
+- `test_protocol.py:123` 和 `:133` 的 `secret@example.com` 同样使用保留域名，测试明确断言该地址不会进入编码后的批次。
+- `test_protocol.py:168` 的 `acct-{provider_index}` 是循环生成的测试标签。
+
+另对 `ae7ede4..HEAD` 的提交历史执行密钥和邮箱模式扫描，除提交元数据和上述合成地址外没有新增命中。未发现真实 API Key、账户邮箱、账户标识或请求正文。
+
+验收结论：集成、自动化测试、目标板构建和秘密复核通过，Agent B 交接已接收。真机硬件、BLE 端到端、旧方屏本轮重跑和本机 `--once` 仍未验证。
+
 ### 复现命令
 
 ```sh
