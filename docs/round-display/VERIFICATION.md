@@ -14,12 +14,12 @@
 
 | 项目 | 结果 |
 | --- | --- |
-| `pio run -e esp32-s3-touch-amoled-175c` | 通过，22.98 秒，增量构建 |
+| `pio run -e esp32-s3-touch-amoled-175c` | 通过，36.904 秒，合并后重新构建 |
 | 目标板 Flash 使用 | 1,243,179 / 13,107,200 bytes，9.5% |
 | 目标板 RAM 使用 | 145,028 / 327,680 bytes，44.3% |
 | 镜像大小 | 1,243,584 bytes |
 | esptool 参数 | `--flash-size 32MB` |
-| `pio run -e esp32-s3-touch-amoled-216` | 通过，23.68 秒，旧方屏环境回归构建 |
+| `pio run -e esp32-s3-touch-amoled-216` | 历史记录通过，23.68 秒；本轮未重跑 |
 
 构建产物位于 `.pio/build/esp32-s3-touch-amoled-175c/firmware.bin` 和 `firmware.elf`。IRAM 静态占用显示为 100%，链接成功，但真机 bring-up 时仍需观察 BLE 和显示并发下的稳定性。
 
@@ -27,8 +27,8 @@
 
 | 套件 | 命令 | 结果 |
 | --- | --- | --- |
-| Companion | `python3 -m unittest discover -s companion/tests -v` | 43 个测试通过 |
-| 固件解析器 | `pio test -e native` | 9 个测试通过 |
+| Companion | `.pio-venv/bin/python -m unittest discover -s companion/tests -v` | 43 个测试通过，0.132 秒 |
+| 固件解析器 | `.pio-venv/bin/pio test -e native` | 9 个测试通过，0.414 秒 |
 
 固件解析器测试覆盖：
 
@@ -78,13 +78,31 @@ fixture 由 Companion 和固件共用。固件 worktree 的副本位于 `test/fi
 
 没有执行 `pio run -t upload`、`esptool write_flash`、擦除 Flash 或修改分区。没有创建 LaunchAgent 或其他后台服务。没有 fork、push 或创建 GitHub Release。真机烧录前需要单独确认恢复方案和串口设备路径。
 
+### 本轮串行集成验收
+
+Agent B 于 2026-10-22 在主 checkout 的 `main` 独立验证。验收基线为 `49fa7ea13e64c044cf1e1f3896211618c3404daa`，父提交为 `87c3b18` 和 `5b2635c`。Companion 经 `87c3b18` 合入，固件经 `49fa7ea` 合入；两条分支均为 main 祖先。验收开始时工作区干净，未使用已丢弃的旧合并。
+
+两项 PlatformIO 命令首次被沙箱拒绝访问用户目录中的缓存锁文件，授权后重跑，均退出 0。Companion 测试退出 0。本轮未重跑旧方屏构建和本机 Magpie `--once`，前述相关结果为历史记录。没有执行真机验证。
+
+两份 fixture 的 SHA-256 均为 `9efd774f0482cca959c48d4e7c5149428cabd9b56b2786857e6180e8623c99c6`。
+
+秘密扫描覆盖 Git 跟踪文件及未忽略的未跟踪文本文件，共 70 个；检查常见密钥格式、邮箱、凭据赋值、账户标识及请求正文相关字段。未发现常见密钥格式命中。以下为字段或测试数据候选命中，仅记录位置，不保存内容：
+
+- `companion/tests/fixtures/codex_claude_quotas.json:6`
+- `companion/tests/fixtures/codex_claude_quotas.json:26`
+- `companion/tests/test_metrics.py:230`
+- `companion/tests/test_protocol.py:123`
+- `companion/tests/test_protocol.py:133`
+- `companion/tests/test_protocol.py:168`
+
+候选均位于测试及 fixture，但本轮未独立证实所有输入标识的来源，因此不能断言不存在真实账户标识。扫描不覆盖 Git 历史、忽略的依赖和构建缓存，也不对二进制图片做 OCR；模式扫描不能证明不存在任意形式的请求正文。此限制保留为交接风险。
+
 ### 复现命令
 
 ```sh
-cd /Users/bruce/dev/magpie-usage-display-round-firmware
-/Users/bruce/dev/magpie-usage-display-round/.pio-venv/bin/pio test -e native
-/Users/bruce/dev/magpie-usage-display-round/.pio-venv/bin/pio run -e esp32-s3-touch-amoled-175c
-
-cd /Users/bruce/dev/magpie-usage-display-round-companion
-/Users/bruce/dev/magpie-usage-display-round/.pio-venv/bin/python -m unittest discover -s companion/tests -v
+cd /Users/bruce/dev/magpie-usage-display-round
+.pio-venv/bin/python -m unittest discover -s companion/tests -v
+.pio-venv/bin/pio test -e native
+.pio-venv/bin/pio run -e esp32-s3-touch-amoled-175c
+shasum -a 256 companion/tests/fixtures/v5_sequence_42.jsonl test/fixtures/v5_sequence_42.jsonl
 ```
