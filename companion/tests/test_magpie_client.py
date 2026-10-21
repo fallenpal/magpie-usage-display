@@ -29,7 +29,9 @@ class MagpieAdapterTests(unittest.TestCase):
         client = FakeMagpieClient()
         snapshot = asyncio.run(collect_snapshot(client))
 
-        self.assertEqual(snapshot.remaining_percent, 75)
+        self.assertEqual(
+            snapshot.providers[0].windows[0].remaining_percent, 75
+        )
         self.assertEqual(snapshot.tokens_today, 25)
         self.assertEqual(snapshot.calls_today, 2)
         self.assertCountEqual(
@@ -43,16 +45,23 @@ class MagpieAdapterTests(unittest.TestCase):
 
 
 class SnapshotCacheTests(unittest.IsolatedAsyncioTestCase):
-    async def test_refresh_encodes_protocol_v4_snapshot(self):
+    async def test_refresh_encodes_protocol_v5_batch(self):
         cache = SnapshotCache(FakeMagpieClient(), refresh_seconds=60)
         await cache.refresh()
 
-        payload = json.loads(await cache.encoded())
+        messages = [
+            json.loads(message) for message in await cache.batch()
+        ]
 
-        self.assertEqual(payload["v"], 4)
-        self.assertEqual(payload["r"], 75)
-        self.assertEqual(payload["f"], 2)
-        self.assertEqual(payload["m"], "test-model")
+        self.assertEqual(messages[0]["v"], 5)
+        self.assertEqual(messages[0]["k"], "s")
+        self.assertEqual(messages[0]["r"], 75)
+        self.assertEqual(messages[0]["f"], 2)
+        self.assertEqual(messages[0]["m"], "test-model")
+        self.assertEqual(messages[1]["k"], "x")
+        self.assertEqual(messages[-1]["k"], "e")
+        self.assertEqual(messages[-1]["c"], 1)
+        self.assertEqual(messages[-1]["w"], 1)
 
 
 if __name__ == "__main__":
