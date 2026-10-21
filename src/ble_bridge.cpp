@@ -1,6 +1,7 @@
 #include "ble_bridge.h"
 
 #include <ArduinoJson.h>
+#include <atomic>
 
 #include "status_parser.h"
 #include <BLE2902.h>
@@ -29,6 +30,16 @@ constexpr size_t kMaxStatusMessageBytes = 250;
 
 BLEServer* server = nullptr;
 BLECharacteristic* command_characteristic = nullptr;
+struct StatusMessage {
+  uint32_t generation;
+  uint16_t length;
+  uint8_t data[kMaxStatusMessageBytes];
+};
+QueueHandle_t incoming_status_queue = nullptr;
+std::atomic<uint32_t> connection_generation{0};
+std::atomic<bool> incoming_status_overflow{false};
+uint32_t parser_generation = 0;
+AppState parsed_state;
 QueueHandle_t state_queue = nullptr;
 QueueHandle_t result_queue = nullptr;
 QueueHandle_t pairing_code_queue = nullptr;
@@ -48,8 +59,7 @@ class ServerCallbacks final : public BLEServerCallbacks {
   void onConnect(BLEServer*) override {
     connected = true;
     status_received_on_connection = false;
-    last_sequence = 0;
-    status_parser.resetConnection();
+    connection_generation.fetch_add(1);
     Serial.println("[ble] connected");
   }
 
@@ -70,29 +80,14 @@ class StatusCallbacks final : public BLECharacteristicCallbacks {
       return;
     }
 
-    AppState state;
-    uint32_t sequence = 0;
-    const StatusParseResult result = status_parser.ingest(
-        reinterpret_cast<const uint8_t*>(value.c_str()), value.length(),
-        millis(), state, sequence);
-
-    if (result == StatusParseResult::kCommitted) {
-      last_sequence = sequence;
-      last_status_at_ms = millis();
-      status_received_on_connection = true;
-      xQueueOverwrite(state_queue, &state);
-      unsigned int total_windows = 0;
-      for (uint8_t index = 0; index < state.provider_count; ++index) {
-        total_windows += state.providers[index].window_count;
-      }
-      Serial.printf("[ble] committed seq=%lu providers=%u windows=%u\n",
-                    static_cast<unsigned long>(sequence),
-                    static_cast<unsigned int>(state.provider_count),
-                    total_windows);
-    } else if (result == StatusParseResult::kIgnored &&
-               status_parser.lastError()[0] != '\0') {
-      Serial.printf("[ble] ignored status: %s\n",
-                    status_parser.lastError());
+    // Arduino runs this callback on a 4 KB task. Only enqueue bounded bytes;
+    // parsing and the full multi-provider state belong to the main loop.
+    StatusMessage message;
+    message.generation = connection_generation.load();
+    message.length = value.length();
+    memcpy(message.data, value.c_str(), message.length);
+    if (xQueueSend(incoming_status_queue, &message, 0) != pdTRUE) {
+      incoming_status_overflow.store(true);
     }
   }
 };
@@ -150,11 +145,12 @@ class SecurityCallbacks final : public BLESecurityCallbacks {
 }  // namespace
 
 bool bleBegin() {
+  incoming_status_queue = xQueueCreate(32, sizeof(StatusMessage));
   state_queue = xQueueCreate(1, sizeof(AppState));
   result_queue = xQueueCreate(1, sizeof(BleActionResult));
   pairing_code_queue = xQueueCreate(1, sizeof(uint32_t));
   pairing_finished_queue = xQueueCreate(1, sizeof(bool));
-  if (state_queue == nullptr || result_queue == nullptr ||
+  if (incoming_status_queue == nullptr || state_queue == nullptr || result_queue == nullptr ||
       pairing_code_queue == nullptr || pairing_finished_queue == nullptr) {
     Serial.println("[ble] failed to allocate queues");
     return false;
@@ -222,6 +218,41 @@ bool bleConnected() {
 }
 
 void bleMaintainConnection() {
+  // The parser is owned exclusively by the main loop, including resets.
+  const uint32_t generation = connection_generation.load();
+  if (parser_generation != generation) {
+    status_parser.resetConnection();
+    parser_generation = generation;
+    last_sequence = 0;
+  }
+  if (incoming_status_overflow.exchange(false)) {
+    xQueueReset(incoming_status_queue);
+    status_parser.resetConnection();
+    Serial.println("[ble] incoming queue overflow; waiting for next batch");
+  }
+  StatusMessage message;
+  while (xQueueReceive(incoming_status_queue, &message, 0) == pdTRUE) {
+    if (!connected || message.generation != parser_generation) continue;
+    uint32_t sequence = 0;
+    const auto result = status_parser.ingest(message.data, message.length,
+                                            millis(), parsed_state, sequence);
+    if (result == StatusParseResult::kCommitted && connected &&
+        connection_generation.load() == parser_generation) {
+      last_sequence = sequence;
+      last_status_at_ms = millis();
+      status_received_on_connection = true;
+      xQueueOverwrite(state_queue, &parsed_state);
+      unsigned int windows = 0;
+      for (uint8_t i = 0; i < parsed_state.provider_count; ++i) {
+        windows += parsed_state.providers[i].window_count;
+      }
+      Serial.printf("[ble] committed seq=%lu providers=%u windows=%u\n",
+                    static_cast<unsigned long>(sequence),
+                    static_cast<unsigned int>(parsed_state.provider_count), windows);
+    } else if (result == StatusParseResult::kIgnored && status_parser.lastError()[0]) {
+      Serial.printf("[ble] ignored status: %s\n", status_parser.lastError());
+    }
+  }
   status_parser.expire(millis());
   if (!connected || !status_received_on_connection || server == nullptr ||
       millis() - last_status_at_ms < kStatusWatchdogMs) {

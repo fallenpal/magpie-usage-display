@@ -397,7 +397,7 @@ void refreshUi() {
 void updateBle() {
   bleMaintainConnection();
 
-  AppState received_state;
+  static AppState received_state;
   if (bleTakeState(received_state)) {
     app_state = received_state;
     state_received_at_ms = millis();

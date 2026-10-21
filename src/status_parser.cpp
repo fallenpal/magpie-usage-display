@@ -1,4 +1,5 @@
 #include "status_parser.h"
+#include <new>
 
 #include <ArduinoJson.h>
 #include <cstring>
@@ -67,7 +68,8 @@ uint32_t clampU32(uint64_t value) {
 }  // namespace
 
 void StatusParser::clearBatchData() {
-  staging_.state = AppState{};
+  staging_.state.~AppState();
+  new (&staging_.state) AppState{};
   staging_.summary_seen = false;
   staging_.stats_seen = false;
   staging_.expected_providers = 0;
@@ -81,7 +83,9 @@ void StatusParser::clearBatchData() {
 }
 
 void StatusParser::resetConnection() {
-  staging_ = Staging{};
+  // Reconstruct in place rather than placing a multi-KB temporary on the stack.
+  staging_.~Staging();
+  new (&staging_) Staging{};
   last_committed_sequence_ = 0;
   last_error_ = "";
 }
@@ -135,7 +139,8 @@ StatusParseResult StatusParser::ingest(const uint8_t* data, size_t length,
       last_error_ = "already committed";
       return StatusParseResult::kIgnored;
     }
-    staging_ = Staging{};
+    staging_.~Staging();
+    new (&staging_) Staging{};
     staging_.active = true;
     staging_.sequence = sequence;
   }
