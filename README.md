@@ -1,5 +1,33 @@
 # Magpie Usage Display
 
+## 本 Fork：微雪 1.75C 圆屏版本
+
+本 Fork 已适配 **ESP32-S3-Touch-AMOLED-1.75C，466×466 圆形 AMOLED，32 MB Flash / 8 MB PSRAM**。
+
+- 四个页面：Overview、Usage、Sessions、Context。
+- 左右滑动切换主页面，Usage 内上下滑动切换 Magpie 返回的供应商。
+- 展示账户额度、多个额度窗口和重置倒计时；使用 BLE v5 批次同步。
+- 已完成首次真机烧录、Codex / Claude 数据接收，以及圆屏居中和文字遮挡修复。
+
+目标板构建命令：
+
+```sh
+.pio-venv/bin/pio run -e esp32-s3-touch-amoled-175c
+```
+
+Companion 启动命令：
+
+```sh
+./companion/run.sh
+```
+
+开发资料入口：[[docs/round-display/README]]。真机记录：[[docs/round-display/FLASHING-2026-10-22]]。这些文档中的本机绝对路径是原开发环境记录，其他电脑请使用自己的项目路径。
+
+![圆屏 Usage 设计参考](docs/round-display/assets/concept-v2-usage-providers.png)
+
+以下保留上游说明，其中 **2.16 方屏的硬件和构建命令不适用于本 Fork 的 1.75C 目标板**；以本节目标环境及圆屏开发资料为准。
+
+
 [简体中文](README.md) | [English](README.en.md)
 
 将本机 Magpie 网关的用量和运行状态显示在一块 480 × 480 AMOLED 开发板上。
