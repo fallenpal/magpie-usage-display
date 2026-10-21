@@ -1,0 +1,60 @@
+{
+  "data": [
+    {
+      "provider": "claude",
+      "name": "Claude",
+      "accountId": "claude-user-123",
+      "readAt": "2026-10-22T03:10:00Z",
+      "windows": [
+        {
+          "name": "5 hours",
+          "used": 25,
+          "remaining": 75,
+          "resetsAt": "2026-10-22T07:15:00Z"
+        },
+        {
+          "name": "7 days",
+          "used": 60,
+          "remaining": 40,
+          "resetsAt": "2026-10-27T00:00:00Z"
+        }
+      ]
+    },
+    {
+      "provider": "codex",
+      "name": "Codex",
+      "accountId": "codex-user-456",
+      "readAt": "2026-10-22T03:10:05Z",
+      "windows": [
+        {
+          "name": "7 days",
+          "used": 95,
+          "remaining": 5,
+          "resetsAt": "2026-10-27T07:33:40Z"
+        },
+        {
+          "name": "5 hours",
+          "used": 40,
+          "remaining": 60,
+          "resetsAt": "2026-10-22T08:00:00Z"
+        }
+      ]
+    },
+    {
+      "provider": "gemini",
+      "name": "Gemini",
+      "windows": [
+        {
+          "name": "Daily",
+          "used": 10,
+          "remaining": 90,
+          "resetsAt": "2026-10-23T00:00:00Z"
+        },
+        {
+          "name": "Monthly",
+          "unlimited": true
+        }
+      ]
+    }
+  ]
+}

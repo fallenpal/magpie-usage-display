@@ -1,4 +1,5 @@
 import asyncio
+import json
 import unittest
 from unittest.mock import AsyncMock, patch
 
@@ -28,18 +29,22 @@ class HangingBleClient:
 
 
 class BleTests(unittest.IsolatedAsyncioTestCase):
-    async def test_connection_refreshes_before_first_status(self):
+    async def test_connection_refreshes_before_sending_whole_batch(self):
         order = []
+        messages = [
+            b'{"v":5,"s":1,"k":"s"}',
+            b'{"v":5,"s":1,"k":"e"}',
+        ]
 
         async def status():
             order.append("status")
-            return b"{}"
+            return messages
 
         async def refresh():
             order.append("refresh")
 
         companion = BleCompanion(status, refresh)
-        client = FakeBleClient(expected_writes=1)
+        client = FakeBleClient(expected_writes=2)
         client.start_notify = AsyncMock()
         disconnected = asyncio.Event()
         disconnected.set()
@@ -47,11 +52,20 @@ class BleTests(unittest.IsolatedAsyncioTestCase):
         await companion._run_connection(client, disconnected)
 
         self.assertEqual(order, ["refresh", "status"])
+        self.assertEqual(
+            [write[1] for write in client.writes], messages
+        )
         self.assertFalse(companion.connected_event.is_set())
 
-    async def test_status_change_sends_without_waiting_for_heartbeat(self):
+    async def test_heartbeat_sends_all_batch_messages_in_order(self):
+        messages = [
+            b'{"v":5,"s":2,"k":"s"}',
+            b'{"v":5,"s":2,"k":"p"}',
+            b'{"v":5,"s":2,"k":"e"}',
+        ]
+
         async def status():
-            return b'{"a":1}'
+            return messages
 
         async def refresh():
             return None
@@ -63,22 +77,38 @@ class BleTests(unittest.IsolatedAsyncioTestCase):
             heartbeat_seconds=999,
             status_changed=changed,
         )
-        client = FakeBleClient(expected_writes=1)
+        client = FakeBleClient(expected_writes=3)
         changed.set()
 
         await companion._heartbeat_loop(client)
 
-        self.assertEqual(client.writes[0][1], b'{"a":1}')
+        self.assertEqual(
+            [write[1] for write in client.writes], messages
+        )
 
-    async def test_duplicate_request_is_not_executed_twice(self):
+    async def test_batch_write_stops_when_connection_drops(self):
         async def status():
-            return b"{}"
+            return [b"one", b"two", b"three"]
 
         async def refresh():
             return None
 
         companion = BleCompanion(status, refresh)
-        command = b'{"v":4,"sid":55,"id":7,"a":"focus_magpie"}'
+        client = FakeBleClient(expected_writes=1)
+
+        await companion._send_status(client)
+
+        self.assertEqual(len(client.writes), 1)
+
+    async def test_duplicate_request_is_not_executed_twice(self):
+        async def status():
+            return [b'{"v":5,"s":9,"k":"s"}']
+
+        async def refresh():
+            return None
+
+        companion = BleCompanion(status, refresh)
+        command = b'{"v":5,"sid":55,"id":7,"a":"focus_magpie"}'
         companion._commands.put_nowait(command)
         companion._commands.put_nowait(command)
         client = FakeBleClient(expected_writes=3)
@@ -91,9 +121,28 @@ class BleTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(len(client.writes), 3)
         self.assertEqual(client.writes[0][1], client.writes[2][1])
 
+    async def test_invalid_command_returns_error_result(self):
+        async def status():
+            return [b'{"v":5,"s":9,"k":"s"}']
+
+        async def refresh():
+            return None
+
+        companion = BleCompanion(status, refresh)
+        companion._commands.put_nowait(
+            b'{"v":4,"sid":55,"id":7,"a":"refresh"}'
+        )
+        client = FakeBleClient(expected_writes=1)
+
+        await companion._command_loop(client)
+
+        result = json.loads(client.writes[0][1])
+        self.assertEqual(result["ok"], 0)
+        self.assertIn("版本", result["m"])
+
     async def test_status_write_times_out(self):
         async def status():
-            return b"{}"
+            return [b"{}"]
 
         async def refresh():
             return None
@@ -110,7 +159,7 @@ class BleTests(unittest.IsolatedAsyncioTestCase):
 
     async def test_disconnect_timeout_does_not_block_reconnect(self):
         async def status():
-            return b"{}"
+            return [b"{}"]
 
         async def refresh():
             return None

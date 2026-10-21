@@ -1,0 +1,37 @@
+{
+  "series": [
+    {
+      "input": 10,
+      "output": 2,
+      "cache_read": 3
+    },
+    {
+      "input": 100,
+      "output": 20,
+      "reasoning": 5,
+      "cache_read": 30,
+      "cache_write": 7,
+      "calls": 7,
+      "errors": 2,
+      "timed": 5,
+      "ttft_ms": 6250
+    }
+  ],
+  "input": 123456,
+  "output": 23456,
+  "cache_read": 987654,
+  "reasoning": 34567,
+  "cost": 6.11,
+  "sessionCount": 40,
+  "calls": 500,
+  "models": [
+    {
+      "name": "gpt-5.6-sol",
+      "calls": 450
+    },
+    {
+      "name": "claude-opus-5-5",
+      "calls": 50
+    }
+  ]
+}

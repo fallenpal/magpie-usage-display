@@ -1,6 +1,6 @@
 import asyncio
 import logging
-from typing import Any, Awaitable, Callable, Optional
+from typing import Any, Awaitable, Callable, List, Optional
 
 from .actions import perform_action
 from .constants import (
@@ -21,7 +21,7 @@ BLE_DISCONNECT_TIMEOUT_SECONDS = 5
 class BleCompanion:
     def __init__(
         self,
-        get_status: Callable[[], Awaitable[bytes]],
+        get_status: Callable[[], Awaitable[List[bytes]]],
         request_refresh: Callable[[], Awaitable[None]],
         device_name: str = DEVICE_NAME,
         heartbeat_seconds: float = 15,
@@ -160,8 +160,12 @@ class BleCompanion:
             await self._send_status(client)
 
     async def _send_status(self, client: Any) -> None:
-        payload = await self._get_status()
-        await self._write_gatt_char(client, STATUS_UUID, payload)
+        messages = await self._get_status()
+        for payload in messages:
+            if not client.is_connected:
+                return
+            await self._write_gatt_char(client, STATUS_UUID, payload)
+            await asyncio.sleep(0.01)
 
     async def _write_gatt_char(
         self, client: Any, uuid: str, payload: bytes
