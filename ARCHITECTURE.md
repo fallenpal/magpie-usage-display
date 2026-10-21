@@ -6,6 +6,6 @@ companion/ 负责接口轮询、统计、编码及 BLE；src/ 负责板级启动
 
 设计决策：额度按供应商账户及窗口展示；Usage 横向属于四个主页面之一，纵向切换供应商；重置时间以绝对时间传输，设备本地倒计时；完整快照原子更新，过期和未知显式呈现。多供应商不能沿用全局最小额度选择逻辑。
 
-共享线协议尚待 Agent B 设计冻结，细节见 docs/round-display/INTERFACE-CONTRACT.md。Agent A 负责固件，Agent B 负责 Companion 并集成。硬件引脚和触控驱动必须查官方 1.75C 文档，不能仅按芯片型号迁移。
+BLE v5 多供应商批次协议已冻结，Companion 编码和测试已完成，细节见 docs/round-display/INTERFACE-CONTRACT.md。Agent A 负责固件，Agent B 负责 Companion 并集成。硬件引脚和触控驱动必须查官方 1.75C 文档，不能仅按芯片型号迁移。
 
-当前状态：源码基线及交接资料已保存，适配未实现，未烧录，未创建 GitHub Fork。
+当前状态：Companion 多供应商适配已在 codex/provider-usage 分支实现，43 个测试通过，并已对本机 Magpie 做只读 --once 验证。固件 1.75C 适配尚未实现，未烧录，未创建 GitHub Fork。

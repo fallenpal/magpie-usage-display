@@ -6,7 +6,9 @@
 
 负责 src/、esp32/、src/fonts/、platformio.ini、lv_conf.h 以及需要的目标板构建配置。核对微雪 1.75C 引脚及 CO5300/CST9217 驱动，适配 466×466 圆屏。实现四页界面、Usage 上下滑供应商、倒计时、状态处理和 BLE 接收模型。
 
-不修改 companion/ 或 docs/BLE_PROTOCOL.md，协议以 Agent B 冻结版本为准。先用合成 fixture 开发，不依赖 Claude 真实账户。
+不修改 companion/ 或 docs/BLE_PROTOCOL.md，协议以 [[INTERFACE-CONTRACT]] 和 companion/tests/fixtures/v5_sequence_42.jsonl 为准。先用合成 fixture 开发，不依赖 Claude 真实账户。
+
+解析器必须接收 `k:"s"` 汇总和 `k:"x"` 累计统计两种消息，二者都在才允许提交；供应商和窗口按 `c`/`w` 计数校验。批次上限 32 条，超过 5 秒未收到 `e` 时丢弃 staging，保留旧快照。
 
 验证目标板编译、圆形边界排版、手势方向锁定和数据边界；记录尚未完成的真机验证。不要未授权烧录、擦除当前固件或安装后台服务。
 
