@@ -1,0 +1,11 @@
+## 当前架构与目标
+
+Magpie 本地 HTTP API → macOS Python Companion → 加密 BLE → ESP32-S3 LVGL 圆屏。
+
+companion/ 负责接口轮询、统计、编码及 BLE；src/ 负责板级启动、状态、BLE 接收和 UI；platformio.ini 为固件构建配置。现有上游面向 480×480 的 2.16 开发板，本项目目标为 466×466 圆屏 1.75C。
+
+设计决策：额度按供应商账户及窗口展示；Usage 横向属于四个主页面之一，纵向切换供应商；重置时间以绝对时间传输，设备本地倒计时；完整快照原子更新，过期和未知显式呈现。多供应商不能沿用全局最小额度选择逻辑。
+
+共享线协议尚待 Agent B 设计冻结，细节见 docs/round-display/INTERFACE-CONTRACT.md。Agent A 负责固件，Agent B 负责 Companion 并集成。硬件引脚和触控驱动必须查官方 1.75C 文档，不能仅按芯片型号迁移。
+
+当前状态：源码基线及交接资料已保存，适配未实现，未烧录，未创建 GitHub Fork。
