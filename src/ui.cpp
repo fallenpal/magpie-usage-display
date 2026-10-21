@@ -15,7 +15,7 @@ constexpr uint32_t kGreen = 0xA8FF4F;
 constexpr uint32_t kWhite = 0xF4F7ED;
 constexpr uint32_t kMuted = 0x718079;
 constexpr uint32_t kPanel = 0x0B1210;
-constexpr uint32_t kTrack = 0x1A231E;
+constexpr uint32_t kTrack = 0x34483D;
 constexpr uint32_t kDivider = 0x1E2A25;
 constexpr uint32_t kAmber = 0xFFB02E;
 constexpr uint32_t kRed = 0xFF5F57;
@@ -123,6 +123,13 @@ uint32_t quotaColor(int16_t used_percent) {
   return kGreen;
 }
 
+void hideScrollbars(lv_obj_t* object) {
+  lv_obj_set_scrollbar_mode(object, LV_SCROLLBAR_MODE_OFF);
+  for (uint32_t i = 0; i < lv_obj_get_child_cnt(object); ++i) {
+    hideScrollbars(lv_obj_get_child(object, i));
+  }
+}
+
 void setArcColor(lv_obj_t* arc, uint32_t arc_color) {
   lv_obj_set_style_arc_color(arc, color(arc_color), LV_PART_INDICATOR);
 }
@@ -139,6 +146,7 @@ void createRing(lv_obj_t* parent, lv_obj_t** arc, lv_obj_t** value,
   lv_obj_remove_style(*arc, nullptr, LV_PART_KNOB);
   lv_obj_set_style_arc_width(*arc, 12, LV_PART_MAIN);
   lv_obj_set_style_arc_color(*arc, color(kTrack), LV_PART_MAIN);
+  lv_obj_set_style_arc_opa(*arc, LV_OPA_COVER, LV_PART_MAIN);
   lv_obj_set_style_arc_width(*arc, 12, LV_PART_INDICATOR);
   lv_obj_set_style_arc_color(*arc, color(kGreen), LV_PART_INDICATOR);
   lv_obj_set_style_bg_opa(*arc, LV_OPA_TRANSP, LV_PART_MAIN);
@@ -156,7 +164,7 @@ void createRing(lv_obj_t* parent, lv_obj_t** arc, lv_obj_t** value,
 
 void createUsageGauge(lv_obj_t* parent) {
   usage_gauge = lv_arc_create(parent);
-  lv_obj_set_pos(usage_gauge, 133, 34);
+  lv_obj_set_pos(usage_gauge, 133, 48);
   lv_obj_set_size(usage_gauge, 200, 200);
   lv_arc_set_rotation(usage_gauge, 0);
   lv_arc_set_bg_angles(usage_gauge, 135, 405);
@@ -165,17 +173,19 @@ void createUsageGauge(lv_obj_t* parent) {
   lv_obj_remove_style(usage_gauge, nullptr, LV_PART_KNOB);
   lv_obj_set_style_arc_width(usage_gauge, 14, LV_PART_MAIN);
   lv_obj_set_style_arc_color(usage_gauge, color(kTrack), LV_PART_MAIN);
+  lv_obj_set_style_arc_opa(usage_gauge, LV_OPA_COVER, LV_PART_MAIN);
   lv_obj_set_style_arc_width(usage_gauge, 14, LV_PART_INDICATOR);
   lv_obj_set_style_arc_color(usage_gauge, color(kGreen), LV_PART_INDICATOR);
   lv_obj_set_style_bg_opa(usage_gauge, LV_OPA_TRANSP, LV_PART_MAIN);
   lv_obj_clear_flag(usage_gauge, LV_OBJ_FLAG_CLICKABLE);
 
+  // Fixed-width centered labels remain centered as digits and fonts change.
   usage_value_label =
-      createLabel(parent, "--", &lv_font_montserrat_48, kWhite);
-  lv_obj_align_to(usage_value_label, usage_gauge, LV_ALIGN_CENTER, 0, -16);
+      createCenteredLabel(parent, 104, "--", &lv_font_montserrat_48,
+                          kWhite, 186);
   usage_caption_label =
-      createLabel(parent, "USED", &lv_font_montserrat_12, kMuted);
-  lv_obj_align_to(usage_caption_label, usage_gauge, LV_ALIGN_CENTER, 0, 28);
+      createCenteredLabel(parent, 168, "USED", &lv_font_montserrat_12,
+                          kMuted, 180);
 }
 
 size_t activePageIndex() {
@@ -301,7 +311,7 @@ String formatCost(uint32_t micros) {
 }
 
 void createOverviewPage(lv_obj_t* page) {
-  createRing(page, &success_arc, &success_value_label, "SUCCESS", 54, 10, 190);
+  createRing(page, &success_arc, &success_value_label, "SUCCESS", (kPageWidth - 190) / 2, 10, 190);
 
   calls_value_label =
       createCenteredLabel(page, 225, "--", &lv_font_montserrat_32, kWhite,
@@ -868,6 +878,7 @@ void uiCreate(UiActionHandler handler) {
   lv_obj_set_style_bg_color(screen, color(0x030706), LV_PART_MAIN);
   lv_obj_set_style_bg_opa(screen, LV_OPA_COVER, LV_PART_MAIN);
   lv_obj_clear_flag(screen, LV_OBJ_FLAG_SCROLLABLE);
+  lv_obj_set_scrollbar_mode(screen, LV_SCROLLBAR_MODE_OFF);
 
   lv_obj_t* brand_label =
       createCenteredLabel(screen, 10, "MAGPIE", &lv_font_montserrat_18,
@@ -903,6 +914,7 @@ void uiCreate(UiActionHandler handler) {
     lv_obj_set_style_bg_opa(page, LV_OPA_TRANSP, LV_PART_MAIN);
     lv_obj_set_style_pad_all(page, 0, LV_PART_MAIN);
     lv_obj_clear_flag(page, LV_OBJ_FLAG_SCROLLABLE);
+    lv_obj_set_scrollbar_mode(page, LV_SCROLLBAR_MODE_OFF);
   }
   createOverviewPage(pages[0]);
   createUsagePage(pages[1]);
@@ -1013,6 +1025,7 @@ void uiCreate(UiActionHandler handler) {
   lv_obj_set_style_pad_ver(toast, 12, LV_PART_MAIN);
   lv_obj_align(toast, LV_ALIGN_BOTTOM_MID, 0, -76);
   lv_obj_add_flag(toast, LV_OBJ_FLAG_HIDDEN);
+  hideScrollbars(screen);
 }
 
 void uiUpdate(const AppState& state, uint32_t elapsed_seconds) {
