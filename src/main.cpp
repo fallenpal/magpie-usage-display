@@ -19,7 +19,10 @@ namespace {
 
 constexpr uint32_t kUiRefreshMs = 1000;
 constexpr uint32_t kScreenOffLvglRefreshMs = 50;
-constexpr uint32_t kIdleScreenTimeoutMs = 15 * 1000;
+constexpr uint32_t kIdleScreenTimeoutMs = 60 * 1000;
+constexpr int kGestureLockPx = 14;
+constexpr int kHorizontalSwipePx = 50;
+constexpr int kVerticalSwipePx = 40;
 constexpr uint32_t kDataStaleMs = 60 * 1000;
 constexpr uint32_t kButtonDebounceMs = 35;
 constexpr uint32_t kCodexLongPressMs = 1000;
@@ -32,7 +35,7 @@ Arduino_DataBus* display_bus = new Arduino_ESP32QSPI(
     board::kLcdSdio1, board::kLcdSdio2, board::kLcdSdio3);
 
 Arduino_CO5300* display = new Arduino_CO5300(
-    display_bus, board::kLcdReset, 0, board::kScreenWidth,
+    display_bus, board::kLcdReset, 6, board::kScreenWidth,
     board::kScreenHeight, 0, 0, 0, 0);
 
 TouchDrvCST92xx touch;
@@ -45,6 +48,13 @@ lv_color_t* draw_buffer_b = nullptr;
 int16_t touch_x[2] = {};
 int16_t touch_y[2] = {};
 volatile bool touch_pending = false;
+lv_point_t gesture_start = {};
+lv_point_t gesture_last = {};
+bool touch_was_pressed = false;
+bool gesture_locked = false;
+bool gesture_horizontal = false;
+int pending_horizontal_swipe = 0;
+int pending_vertical_swipe = 0;
 
 AppState app_state;
 uint32_t state_received_at_ms = 0;
@@ -142,6 +152,18 @@ void readTouch(lv_indev_drv_t*, lv_indev_data_t* data) {
       touch.getPoint(touch_x, touch_y, touch.getSupportTouchPoint());
   if (points == 0) {
     data->state = LV_INDEV_STATE_REL;
+    data->point = gesture_last;
+    if (touch_was_pressed && gesture_locked) {
+      const int dx = gesture_last.x - gesture_start.x;
+      const int dy = gesture_last.y - gesture_start.y;
+      if (gesture_horizontal && abs(dx) >= kHorizontalSwipePx) {
+        pending_horizontal_swipe = dx < 0 ? 1 : -1;
+      } else if (!gesture_horizontal && abs(dy) >= kVerticalSwipePx) {
+        pending_vertical_swipe = dy < 0 ? 1 : -1;
+      }
+    }
+    touch_was_pressed = false;
+    gesture_locked = false;
     return;
   }
 
@@ -149,6 +171,24 @@ void readTouch(lv_indev_drv_t*, lv_indev_data_t* data) {
   data->state = LV_INDEV_STATE_PR;
   data->point.x = touch_x[0];
   data->point.y = touch_y[0];
+
+  if (!touch_was_pressed) {
+    touch_was_pressed = true;
+    gesture_locked = false;
+    gesture_start = data->point;
+    gesture_last = data->point;
+    return;
+  }
+
+  gesture_last = data->point;
+  if (!gesture_locked) {
+    const int dx = gesture_last.x - gesture_start.x;
+    const int dy = gesture_last.y - gesture_start.y;
+    if (abs(dx) >= kGestureLockPx || abs(dy) >= kGestureLockPx) {
+      gesture_locked = true;
+      gesture_horizontal = abs(dx) >= abs(dy);
+    }
+  }
 }
 
 void handleUiAction(UiAction action) {
@@ -197,13 +237,18 @@ bool initDisplay() {
     Serial.println("[display] initialization failed");
     return false;
   }
-  display_bus->writeC8D8(0x36, 0xA0);
   display->fillScreen(RGB565_BLACK);
   display->setBrightness(board::kDisplayBrightness);
   return true;
 }
 
 bool initTouch() {
+  pinMode(board::kTouchReset, OUTPUT);
+  digitalWrite(board::kTouchReset, LOW);
+  delay(10);
+  digitalWrite(board::kTouchReset, HIGH);
+  delay(50);
+
   touch.setPins(board::kTouchReset, board::kTouchInterrupt);
   if (!touch.begin(Wire, CST92XX_SLAVE_ADDRESS, board::kI2cSda,
                    board::kI2cScl)) {
@@ -212,8 +257,7 @@ bool initTouch() {
   }
 
   touch.setMaxCoordinates(board::kScreenWidth, board::kScreenHeight);
-  touch.setSwapXY(true);
-  touch.setMirrorXY(true, false);
+  touch.setMirrorXY(true, true);
   pinMode(board::kTouchInterrupt, INPUT_PULLUP);
   attachInterrupt(digitalPinToInterrupt(board::kTouchInterrupt),
                   onTouchInterrupt, FALLING);
@@ -436,6 +480,24 @@ void loop() {
       lvgl_now - last_lvgl_refresh_ms >= kScreenOffLvglRefreshMs) {
     last_lvgl_refresh_ms = lvgl_now;
     lv_timer_handler();
+  }
+
+  if (screen_on && !uiModalVisible()) {
+    if (pending_horizontal_swipe != 0) {
+      const int direction = pending_horizontal_swipe;
+      pending_horizontal_swipe = 0;
+      uiSwipePage(direction);
+    }
+    if (pending_vertical_swipe != 0) {
+      const int direction = pending_vertical_swipe;
+      pending_vertical_swipe = 0;
+      if (uiUsagePageActive()) {
+        uiSwipeProvider(direction);
+      }
+    }
+  } else {
+    pending_horizontal_swipe = 0;
+    pending_vertical_swipe = 0;
   }
 
   const uint32_t now = millis();

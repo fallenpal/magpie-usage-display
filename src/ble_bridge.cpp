@@ -1,6 +1,8 @@
 #include "ble_bridge.h"
 
 #include <ArduinoJson.h>
+
+#include "status_parser.h"
 #include <BLE2902.h>
 #include <BLEDevice.h>
 #include <BLEServer.h>
@@ -21,8 +23,9 @@ constexpr char kStatusUuid[] = "7d8b6c20-8f6d-4b44-a0f8-1b6570c0de02";
 constexpr char kCommandUuid[] = "7d8b6c20-8f6d-4b44-a0f8-1b6570c0de03";
 constexpr char kResultUuid[] = "7d8b6c20-8f6d-4b44-a0f8-1b6570c0de04";
 constexpr char kDeviceInfoUuid[] = "7d8b6c20-8f6d-4b44-a0f8-1b6570c0de05";
-constexpr uint8_t kProtocolVersion = 4;
-constexpr uint32_t kStatusWatchdogMs = 45 * 1000;
+constexpr uint8_t kProtocolVersion = 5;
+constexpr uint32_t kStatusWatchdogMs = 75 * 1000;
+constexpr size_t kMaxStatusMessageBytes = 250;
 
 BLEServer* server = nullptr;
 BLECharacteristic* command_characteristic = nullptr;
@@ -36,6 +39,7 @@ volatile uint32_t last_status_at_ms = 0;
 uint32_t next_request_id = 1;
 uint32_t command_session_id = 0;
 uint32_t last_sequence = 0;
+StatusParser status_parser;
 bool has_bonded_device = false;
 bool pairing_code_announced = false;
 
@@ -45,6 +49,7 @@ class ServerCallbacks final : public BLEServerCallbacks {
     connected = true;
     status_received_on_connection = false;
     last_sequence = 0;
+    status_parser.resetConnection();
     Serial.println("[ble] connected");
   }
 
@@ -60,66 +65,35 @@ class StatusCallbacks final : public BLECharacteristicCallbacks {
  public:
   void onWrite(BLECharacteristic* characteristic) override {
     const String value = characteristic->getValue();
-    if (value.isEmpty() || value.length() > 256) {
+    if (value.isEmpty() || value.length() > kMaxStatusMessageBytes) {
       Serial.println("[ble] rejected invalid status length");
       return;
     }
 
-    JsonDocument document;
-    const DeserializationError error =
-        deserializeJson(document, value.c_str(), value.length());
-    if (error || document["v"].as<uint8_t>() != kProtocolVersion) {
-      Serial.println("[ble] rejected invalid status JSON");
-      return;
-    }
-
-    const uint32_t sequence = document["s"] | 0UL;
-    if (sequence == 0 || (last_sequence != 0 && sequence < last_sequence)) {
-      Serial.println("[ble] rejected stale status");
-      return;
-    }
-
     AppState state;
-    state.unix_time = document["t"] | 0ULL;
-    state.utc_offset_minutes = document["o"] | 0;
-    state.remaining_percent =
-        min<uint8_t>(document["r"] | 0, static_cast<uint8_t>(100));
-    state.limit_window_minutes = document["u"] | 0UL;
-    state.quota_reset_seconds = document["q"] | 0UL;
-    state.tokens_today = document["d"] | 0ULL;
-    state.tokens_7d = document["w"] | 0ULL;
-    state.calls_today = document["f"] | 0UL;
-    state.errors_today = document["z"] | 0UL;
-    state.success_permille =
-        min<uint16_t>(document["y"] | 0, static_cast<uint16_t>(1000));
-    state.average_ttft_ms = document["l"] | 0UL;
-    strlcpy(state.latest_model, document["m"] | "-",
-            sizeof(state.latest_model));
-    state.latest_status = document["h"] | 0;
-    state.latest_latency_ms = document["n"] | 0UL;
-    state.latest_failed = (document["b"] | 0) == 1;
-    JsonArray extended = document["x"].as<JsonArray>();
-    state.session_count = extended[0] | 0;
-    state.total_calls = extended[1] | 0UL;
-    state.total_input = extended[2] | 0ULL;
-    state.total_output = extended[3] | 0ULL;
-    state.total_cache_read = extended[4] | 0ULL;
-    state.total_reasoning = extended[5] | 0ULL;
-    state.total_cost_micros = extended[6] | 0UL;
-    state.cache_hit_permille =
-        min<uint16_t>(extended[7] | 0, static_cast<uint16_t>(1000));
-    strlcpy(state.top_model, extended[8] | "-", sizeof(state.top_model));
-    state.top_model_calls = extended[9] | 0UL;
-    state.connection = ConnectionState::kLinked;
-    state.time_valid = state.unix_time > 0;
-    state.data_valid = true;
+    uint32_t sequence = 0;
+    const StatusParseResult result = status_parser.ingest(
+        reinterpret_cast<const uint8_t*>(value.c_str()), value.length(),
+        millis(), state, sequence);
 
-    last_sequence = sequence;
-    last_status_at_ms = millis();
-    status_received_on_connection = true;
-    xQueueOverwrite(state_queue, &state);
-    Serial.printf("[ble] status seq=%lu\n",
-                  static_cast<unsigned long>(sequence));
+    if (result == StatusParseResult::kCommitted) {
+      last_sequence = sequence;
+      last_status_at_ms = millis();
+      status_received_on_connection = true;
+      xQueueOverwrite(state_queue, &state);
+      unsigned int total_windows = 0;
+      for (uint8_t index = 0; index < state.provider_count; ++index) {
+        total_windows += state.providers[index].window_count;
+      }
+      Serial.printf("[ble] committed seq=%lu providers=%u windows=%u\n",
+                    static_cast<unsigned long>(sequence),
+                    static_cast<unsigned int>(state.provider_count),
+                    total_windows);
+    } else if (result == StatusParseResult::kIgnored &&
+               status_parser.lastError()[0] != '\0') {
+      Serial.printf("[ble] ignored status: %s\n",
+                    status_parser.lastError());
+    }
   }
 };
 
@@ -232,7 +206,7 @@ bool bleBegin() {
 
   BLECharacteristic* device_info = service->createCharacteristic(
       kDeviceInfoUuid, BLECharacteristic::PROPERTY_READ);
-  device_info->setValue("{\"v\":4,\"fw\":\"0.4.0\",\"screen\":\"480x480\"}");
+  device_info->setValue("{\"v\":5,\"fw\":\"0.5.0\",\"screen\":\"466x466\"}");
 
   service->start();
   BLEAdvertising* advertising = BLEDevice::getAdvertising();
@@ -248,6 +222,7 @@ bool bleConnected() {
 }
 
 void bleMaintainConnection() {
+  status_parser.expire(millis());
   if (!connected || !status_received_on_connection || server == nullptr ||
       millis() - last_status_at_ms < kStatusWatchdogMs) {
     return;
