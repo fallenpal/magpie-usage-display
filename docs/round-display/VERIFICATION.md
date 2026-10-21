@@ -132,3 +132,7 @@ cd /Users/bruce/dev/magpie-usage-display-round
 .pio-venv/bin/pio run -e esp32-s3-touch-amoled-175c
 shasum -a 256 companion/tests/fixtures/v5_sequence_42.jsonl test/fixtures/v5_sequence_42.jsonl
 ```
+
+### 2026-10-22 真机更新
+
+用户已授权并完成首次烧录。发现并修复 BLEWriteCB 栈溢出，实际固件提交为 `6c29b33`；认证成功并连续接收真实 Codex、Claude 数据。详细备份、恢复、日志和待验收项见 [[FLASHING-2026-10-22]]。前文“未烧录”描述为历史状态。
