@@ -25,18 +25,29 @@ String formatCompactTokens(uint64_t tokens) {
   return String(static_cast<unsigned long>(tokens));
 }
 
-String formatCountdown(uint32_t seconds) {
-  const uint32_t days = seconds / 86400UL;
-  const uint32_t hours = (seconds % 86400UL) / 3600UL;
-  const uint32_t minutes = (seconds % 3600UL) / 60UL;
+String formatCountdown(int64_t seconds) {
+  if (seconds <= 0) {
+    return "RESET DUE";
+  }
+
+  const int64_t days = seconds / 86400LL;
+  const int64_t hours = (seconds % 86400LL) / 3600LL;
+  const int64_t minutes = (seconds % 3600LL) / 60LL;
+  const int64_t remainder = seconds % 60LL;
 
   if (days > 0) {
-    return String(days) + "d " + String(hours) + "h";
+    return String(static_cast<unsigned long>(days)) + "d " +
+           String(static_cast<unsigned long>(hours)) + "h";
   }
   if (hours > 0) {
-    return String(hours) + "h " + String(minutes) + "m";
+    return String(static_cast<unsigned long>(hours)) + "h " +
+           String(static_cast<unsigned long>(minutes)) + "m";
   }
-  return String(minutes) + "m";
+  if (minutes > 0) {
+    return String(static_cast<unsigned long>(minutes)) + "m " +
+           String(static_cast<unsigned long>(remainder)) + "s";
+  }
+  return String(static_cast<unsigned long>(remainder)) + "s";
 }
 
 String formatDateTime(const AppState& state, uint32_t elapsed_seconds) {
@@ -44,15 +55,32 @@ String formatDateTime(const AppState& state, uint32_t elapsed_seconds) {
     return "--/-- --:--";
   }
 
+  return formatResetTime(
+      static_cast<int64_t>(state.unix_time + elapsed_seconds) +
+          static_cast<int64_t>(state.utc_offset_minutes) * 60LL,
+      0);
+}
+
+String formatResetTime(int64_t resets_at, int16_t utc_offset_minutes) {
+  if (resets_at <= 0) {
+    return "--/-- --:--";
+  }
+
   const time_t local_time = static_cast<time_t>(
-      state.unix_time + elapsed_seconds +
-      static_cast<int64_t>(state.utc_offset_minutes) * 60LL);
+      resets_at + static_cast<int64_t>(utc_offset_minutes) * 60LL);
   struct tm value {};
   gmtime_r(&local_time, &value);
 
   char output[16];
   strftime(output, sizeof(output), "%m/%d %H:%M", &value);
   return String(output);
+}
+
+String formatQuotaPercent(int16_t percent) {
+  if (percent < 0) {
+    return "--";
+  }
+  return String(static_cast<int>(percent)) + "%";
 }
 
 const char* connectionLabel(ConnectionState state) {

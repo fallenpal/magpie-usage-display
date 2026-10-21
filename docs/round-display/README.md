@@ -2,7 +2,7 @@
 
 目标：将 peterroe/magpie-usage-display 适配微雪 ESP32-S3-Touch-AMOLED-1.75C，第二页改为多供应商 Usage，支持重置倒计时。
 
-资料整理日期：2026-10-22。当前只有源码基线、需求及效果图，尚未实现、烧录或创建 GitHub Fork。
+资料整理日期：2026-10-22。Companion 和固件 1.75C 适配已实现，构建与自动化测试结果见 [[VERIFICATION]]。尚未烧录真机，尚未创建 GitHub Fork。
 
 - 上游：https://github.com/peterroe/magpie-usage-display
 - 固定基线：5940d479afeb89affc04d13c01f3f644b3f28cc7

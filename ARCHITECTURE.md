@@ -8,4 +8,4 @@ companion/ 负责接口轮询、统计、编码及 BLE；src/ 负责板级启动
 
 BLE v5 多供应商批次协议已冻结，Companion 编码和测试已完成，细节见 docs/round-display/INTERFACE-CONTRACT.md。Agent A 负责固件，Agent B 负责 Companion 并集成。硬件引脚和触控驱动必须查官方 1.75C 文档，不能仅按芯片型号迁移。
 
-当前状态：Companion 多供应商适配已在 codex/provider-usage 分支实现，43 个测试通过，并已对本机 Magpie 做只读 --once 验证。固件 1.75C 适配尚未实现，未烧录，未创建 GitHub Fork。
+当前状态：Companion 多供应商适配已在 codex/provider-usage 分支实现，43 个测试通过，并已对本机 Magpie 做只读 --once 验证。固件 1.75C 适配已在 codex/round-display-ui 分支实现，9 个解析器测试通过，1.75C 目标板构建通过，详见 docs/round-display/VERIFICATION.md。尚未烧录，未创建 GitHub Fork。
