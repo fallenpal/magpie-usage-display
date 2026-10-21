@@ -33,6 +33,14 @@ int16_t parsePercent(JsonVariantConst value) {
   return static_cast<int16_t>(raw);
 }
 
+bool readInt(JsonVariantConst value, int& output) {
+  if (value.isNull() || value.is<bool>() || !value.is<int>()) {
+    return false;
+  }
+  output = value.as<int>();
+  return true;
+}
+
 uint16_t clampPermille(uint32_t value) {
   return static_cast<uint16_t>(value > 1000 ? 1000 : value);
 }
@@ -153,9 +161,11 @@ StatusParseResult StatusParser::ingest(const uint8_t* data, size_t length,
       staging_.updated_at = now_ms;
     }
 
-    const uint8_t provider_count = document["c"] | 0;
-    const uint8_t window_count = document["w"] | 0;
-    if (provider_count > kMaxProviders ||
+    int provider_count = 0;
+    int window_count = 0;
+    if (!readInt(document["c"], provider_count) ||
+        !readInt(document["w"], window_count) || provider_count < 0 ||
+        provider_count > kMaxProviders || window_count < 0 ||
         window_count > kMaxTotalWindows) {
       return fail("batch exceeds device limits");
     }
@@ -184,8 +194,8 @@ StatusParseResult StatusParser::ingest(const uint8_t* data, size_t length,
     state.batch_truncated_count =
         static_cast<uint16_t>(document["to"] | 0);
 
-    staging_.expected_providers = provider_count;
-    staging_.expected_windows = window_count;
+    staging_.expected_providers = static_cast<uint8_t>(provider_count);
+    staging_.expected_windows = static_cast<uint8_t>(window_count);
     staging_.summary_seen = true;
     return StatusParseResult::kStaged;
   }
@@ -219,9 +229,11 @@ StatusParseResult StatusParser::ingest(const uint8_t* data, size_t length,
   }
 
   if (strcmp(kind, "p") == 0) {
-    const uint8_t provider_count = document["c"] | 0;
-    const uint8_t index = document["i"] | 0;
-    if (provider_count != staging_.expected_providers ||
+    int provider_count = 0;
+    int index = 0;
+    if (!readInt(document["c"], provider_count) ||
+        !readInt(document["i"], index) ||
+        provider_count != staging_.expected_providers || index < 0 ||
         index >= provider_count || index >= kMaxProviders) {
       return fail("invalid provider message");
     }
@@ -241,14 +253,20 @@ StatusParseResult StatusParser::ingest(const uint8_t* data, size_t length,
   }
 
   if (strcmp(kind, "w") == 0) {
-    const uint8_t provider_index = document["p"] | 0;
-    const uint8_t window_index = document["i"] | 0;
-    const uint8_t window_count = document["w"] | 0;
-    if (provider_index >= staging_.expected_providers ||
-        window_count == 0 ||
-        window_count > kMaxWindowsPerProvider ||
+    int provider_index = 0;
+    int window_index = 0;
+    int window_count = 0;
+    if (!readInt(document["p"], provider_index) ||
+        !readInt(document["i"], window_index) ||
+        !readInt(document["w"], window_count) || provider_index < 0 ||
+        provider_index >= staging_.expected_providers ||
+        window_count <= 0 ||
+        window_count > kMaxWindowsPerProvider || window_index < 0 ||
         window_index >= window_count) {
       return fail("invalid window message");
+    }
+    if (!staging_.provider_seen[provider_index]) {
+      return fail("window before provider");
     }
     if (staging_.window_expected[provider_index] == 0) {
       staging_.window_expected[provider_index] = window_count;
@@ -293,9 +311,11 @@ StatusParseResult StatusParser::ingest(const uint8_t* data, size_t length,
       return fail("missing statistics before end");
     }
 
-    const uint8_t provider_count = document["c"] | 0;
-    const uint8_t window_count = document["w"] | 0;
-    if (provider_count != staging_.expected_providers ||
+    int provider_count = 0;
+    int window_count = 0;
+    if (!readInt(document["c"], provider_count) ||
+        !readInt(document["w"], window_count) ||
+        provider_count != staging_.expected_providers ||
         window_count != staging_.expected_windows ||
         provider_count != staging_.providers_seen ||
         window_count != staging_.windows_seen) {
@@ -303,7 +323,7 @@ StatusParseResult StatusParser::ingest(const uint8_t* data, size_t length,
     }
 
     uint16_t counted_windows = 0;
-    for (uint8_t index = 0; index < provider_count; ++index) {
+    for (int index = 0; index < provider_count; ++index) {
       if (!staging_.provider_seen[index] ||
           staging_.window_seen_count[index] !=
               staging_.window_expected[index]) {

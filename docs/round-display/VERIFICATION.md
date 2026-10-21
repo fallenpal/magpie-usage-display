@@ -14,10 +14,10 @@
 
 | 项目 | 结果 |
 | --- | --- |
-| `pio run -e esp32-s3-touch-amoled-175c` | 通过，29.28 秒 |
-| 目标板 Flash 使用 | 1,242,499 / 13,107,200 bytes，9.5% |
+| `pio run -e esp32-s3-touch-amoled-175c` | 通过，22.98 秒，增量构建 |
+| 目标板 Flash 使用 | 1,243,179 / 13,107,200 bytes，9.5% |
 | 目标板 RAM 使用 | 145,028 / 327,680 bytes，44.3% |
-| 镜像大小 | 1,242,755 bytes |
+| 镜像大小 | 1,243,584 bytes |
 | esptool 参数 | `--flash-size 32MB` |
 | `pio run -e esp32-s3-touch-amoled-216` | 通过，23.68 秒，旧方屏环境回归构建 |
 
@@ -28,7 +28,7 @@
 | 套件 | 命令 | 结果 |
 | --- | --- | --- |
 | Companion | `python3 -m unittest discover -s companion/tests -v` | 43 个测试通过 |
-| 固件解析器 | `pio test -e native` | 7 个测试通过 |
+| 固件解析器 | `pio test -e native` | 9 个测试通过 |
 
 固件解析器测试覆盖：
 
@@ -39,6 +39,8 @@
 - 只提供 used 或 remaining 一侧时派生另一侧，不伪造 0 或 100。
 - 单批次 32 条消息上限。
 - 更高序列的新批次覆盖未完成 staging。
+- 窗口消息早于所属供应商消息时拒绝整批，不提交空白窗口。
+- 供应商或窗口计数超过 uint8 范围时拒绝，不因截断伪装成合法计数。
 
 fixture 由 Companion 和固件共用。固件 worktree 的副本位于 `test/fixtures/v5_sequence_42.jsonl`，内容与 `companion/tests/fixtures/v5_sequence_42.jsonl` 相同，全部为合成数据，不含真实邮箱、API Key 或请求正文。
 

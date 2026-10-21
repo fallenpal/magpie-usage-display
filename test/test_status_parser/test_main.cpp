@@ -304,6 +304,69 @@ void test_newer_sequence_replaces_incomplete_staging() {
   TEST_ASSERT_EQUAL_UINT8(3, committed.provider_count);
 }
 
+void test_window_before_provider_does_not_commit() {
+  StatusParser parser;
+  AppState committed;
+  uint32_t sequence = 0;
+
+  TEST_ASSERT_EQUAL(
+      StatusParseResult::kStaged,
+      feed(parser,
+           "{\"v\":5,\"s\":10,\"k\":\"s\",\"t\":1800000000,\"o\":0,"
+           "\"d\":0,\"f\":0,\"z\":0,\"y\":1000,\"l\":0,\"m\":\"m\","
+           "\"h\":0,\"n\":0,\"b\":0,\"c\":1,\"w\":1,\"r\":50}",
+           1000, committed, sequence));
+  TEST_ASSERT_EQUAL(
+      StatusParseResult::kStaged,
+      feed(parser,
+           "{\"v\":5,\"s\":10,\"k\":\"x\","
+           "\"a\":[0,0,0,0,0,0,0,0,\"-\",0]}",
+           1010, committed, sequence));
+  TEST_ASSERT_EQUAL(
+      StatusParseResult::kIgnored,
+      feed(parser,
+           "{\"v\":5,\"s\":10,\"k\":\"w\",\"p\":0,\"i\":0,\"w\":1,"
+           "\"id\":\"daily\",\"m\":\"Daily\",\"ok\":1,\"u\":50,\"r\":50}",
+           1020, committed, sequence));
+  TEST_ASSERT_EQUAL_STRING("window before provider", parser.lastError());
+  TEST_ASSERT_FALSE(parser.awaitingCommit());
+
+  TEST_ASSERT_EQUAL(
+      StatusParseResult::kIgnored,
+      feed(parser,
+           "{\"v\":5,\"s\":10,\"k\":\"p\",\"i\":0,\"c\":1,"
+           "\"id\":\"p\",\"m\":\"Provider\"}",
+           1030, committed, sequence));
+  TEST_ASSERT_EQUAL(
+      StatusParseResult::kIgnored,
+      feed(parser, "{\"v\":5,\"s\":10,\"k\":\"e\",\"c\":1,\"w\":1}",
+           1040, committed, sequence));
+  TEST_ASSERT_FALSE(parser.awaitingCommit());
+  TEST_ASSERT_FALSE(committed.data_valid);
+  TEST_ASSERT_EQUAL_UINT32(0, parser.lastCommittedSequence());
+}
+
+void test_oversized_counts_are_rejected() {
+  const char* summaries[] = {
+      "{\"v\":5,\"s\":11,\"k\":\"s\",\"c\":256,\"w\":0}",
+      "{\"v\":5,\"s\":12,\"k\":\"s\",\"c\":0,\"w\":256}",
+  };
+
+  for (size_t index = 0;
+       index < sizeof(summaries) / sizeof(summaries[0]); ++index) {
+    StatusParser parser;
+    AppState committed;
+    uint32_t sequence = 0;
+    TEST_ASSERT_EQUAL(StatusParseResult::kIgnored,
+                      feed(parser, summaries[index], 1000, committed,
+                           sequence));
+    TEST_ASSERT_EQUAL_STRING("batch exceeds device limits",
+                             parser.lastError());
+    TEST_ASSERT_FALSE(parser.awaitingCommit());
+    TEST_ASSERT_FALSE(committed.data_valid);
+  }
+}
+
 int main(int, char**) {
   UNITY_BEGIN();
   RUN_TEST(test_golden_batch_commits_atomically);
@@ -313,5 +376,7 @@ int main(int, char**) {
   RUN_TEST(test_derives_missing_percentage);
   RUN_TEST(test_message_count_limit_is_enforced);
   RUN_TEST(test_newer_sequence_replaces_incomplete_staging);
+  RUN_TEST(test_window_before_provider_does_not_commit);
+  RUN_TEST(test_oversized_counts_are_rejected);
   return UNITY_END();
 }

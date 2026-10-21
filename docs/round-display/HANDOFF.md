@@ -6,7 +6,7 @@
 
 | Worktree | 分支 | 提交 | 状态 |
 | --- | --- | --- | --- |
-| `/Users/bruce/dev/magpie-usage-display-round-firmware` | `codex/round-display-ui` | `5333d34` | 工作区干净 |
+| `/Users/bruce/dev/magpie-usage-display-round-firmware` | `codex/round-display-ui` | HEAD，含 `5333d34` 和解析器修复 | 工作区干净 |
 | `/Users/bruce/dev/magpie-usage-display-round-companion` | `codex/provider-usage` | `4e0b97c` | 工作区干净，已合入 main |
 | `/Users/bruce/dev/magpie-usage-display-round` | `main` | `ae7ede4` | 工作区干净，等待集成 |
 
@@ -20,7 +20,7 @@
 - `src/app_state_types.h`：供应商、窗口和配额类型，固定上限 8、4、16。
 - `src/status_parser.h`、`src/status_parser.cpp`：BLE v5 批次原子解析。
 - `test/fixtures/v5_sequence_42.jsonl`：与 Companion 共用的 golden fixture，SHA-256 为 `9efd774f0482cca959c48d4e7c5149428cabd9b56b2786857e6180e8623c99c6`。
-- `test/test_status_parser/test_main.cpp`：7 个 Unity 解析器测试。
+- `test/test_status_parser/test_main.cpp`：9 个 Unity 解析器测试，含乱序和计数溢出用例。
 - `docs/round-display/VERIFICATION.md`：构建、测试和待验证项记录。
 
 修改：
@@ -37,9 +37,9 @@
 
 | 项目 | 结果 |
 | --- | --- |
-| `pio run -e esp32-s3-touch-amoled-175c` | 通过，29.28 秒，Flash 9.5%，RAM 44.3% |
+| `pio run -e esp32-s3-touch-amoled-175c` | 通过，22.98 秒，Flash 1,243,179 bytes，9.5%，RAM 44.3% |
 | `pio run -e esp32-s3-touch-amoled-216` | 通过，23.68 秒，旧方屏回归 |
-| `pio test -e native` | 7 个测试通过 |
+| `pio test -e native` | 9 个测试通过 |
 | Companion `unittest discover` | 43 个测试通过 |
 | Companion `--once` | 已对本机 Magpie 只读验证 |
 
